@@ -8,7 +8,7 @@ on:
 jobs:
   check:
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -23,4 +23,28 @@ jobs:
           echo "UDID=$UDID" >> "$GITHUB_ENV"
           xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
-      - run: flutter test integration_test -d "$UDID"
+      - name: Run integration tests
+        # 시뮬레이터에서 앱이 뜨지 않고 멈추는 일이 가끔 있다(테스트 출력이 한 줄도 없이 대기).
+        # 그때는 시간 제한으로 끊고 시뮬레이터를 다시 켜서 한 번 더 시도한다.
+        # 테스트가 실제로 실패한 경우에는 다시 시도하지 않는다.
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::attempt $attempt"
+            set +e
+            perl -e 'alarm shift; exec @ARGV' 900 flutter test integration_test -d "$UDID"
+            code=$?
+            set -e
+            echo "::endgroup::"
+            if [ "$code" -eq 0 ]; then exit 0; fi
+            if [ "$code" -ne 142 ]; then
+              echo "tests failed (exit $code)"
+              exit "$code"
+            fi
+            echo "attempt $attempt timed out; restarting the simulator"
+            pkill -f "flutter_tools" || true
+            xcrun simctl shutdown "$UDID" || true
+            xcrun simctl boot "$UDID"
+            xcrun simctl bootstatus "$UDID" -b
+          done
+          echo "the app never started on the simulator"
+          exit 1
