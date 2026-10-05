@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/diag/diag_log.dart';
 import '../../data/db/app_database.dart';
 import '../../domain/book_format.dart';
 import '../../providers.dart';
 import '../reader/reader_screen.dart';
+import '../settings/diag_screen.dart';
 import 'import/book_importer.dart';
 
 /// 앱 문서 폴더가 파일 앱에 보이는 플랫폼에서만 "앱 폴더에서 가져오기"를 쓴다.
@@ -47,12 +49,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     if (!_usesAppFolder) return;
     try {
       final count = await ref.read(inboxScannerProvider).scan();
+      DiagLog.add('앱 폴더 스캔: $count권 추가');
       if (count > 0) {
         _showMessage('앱 폴더에서 $count권을 추가했습니다.');
       } else if (!silent) {
         _showMessage('앱 폴더에 새로 넣은 책이 없습니다. 파일 앱 → 나의 iPhone → Reader App 폴더에 넣어 주세요.');
       }
     } catch (error) {
+      DiagLog.add('앱 폴더 스캔 실패: $error');
       _showMessage('앱 폴더를 읽지 못했습니다: $error');
     }
   }
@@ -76,6 +80,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           : ' (지원하지 않는 파일 ${picked.skipped.length}개 제외)';
       _showMessage('$count권을 추가했습니다.$skipped');
     } catch (error) {
+      DiagLog.add('파일 가져오기 실패: $error');
       _showMessage('가져오기에 실패했습니다: $error');
     }
   }
@@ -173,6 +178,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   _scanAppFolder(silent: false);
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('진단 기록'),
+              subtitle: const Text('가져오기가 안 될 때 어디서 멈추는지 확인'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const DiagScreen()),
+                );
+              },
+            ),
           ],
         ),
       ),

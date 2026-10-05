@@ -1,6 +1,7 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../core/diag/diag_log.dart';
+import '../../../core/platform/file_picker_bridge.dart';
 import '../../../core/platform/folder_picker.dart';
 import '../../../core/storage/book_storage.dart';
 import '../../../core/utils/natural_compare.dart';
@@ -43,12 +44,14 @@ class BookImporter {
   /// 파일 선택 창을 띄우고 고른 파일을 종류별로 나눈다. 취소하면 null.
   Future<PickedFiles?> pickFiles() async {
     // iOS는 커스텀 확장자 필터가 불안정해서 전부 보여주고 확장자로 직접 거른다.
-    final files = await FilePicker.pickFiles();
-    if (files.isEmpty) return null;
-    return classify([
-      for (final file in files)
-        if (file.path != null) file.path!,
-    ]);
+    final paths = await pickFilePaths();
+    if (paths.isEmpty) return null;
+    final picked = classify(paths);
+    DiagLog.add(
+      '분류: 책 ${picked.books.length}, 이미지 ${picked.images.length}, '
+      '제외 ${picked.skipped.length} (첫 파일: ${p.basename(paths.first)})',
+    );
+    return picked;
   }
 
   PickedFiles classify(List<String> paths) {
