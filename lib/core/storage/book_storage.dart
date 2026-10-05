@@ -52,7 +52,8 @@ class BookStorage {
 
   /// 폴더 안의 이미지(하위 폴더 포함)만 books 폴더로 복사하고 저장된 폴더 이름을 돌려준다.
   /// 이미지가 하나도 없으면 [FormatException].
-  Future<String> importImageFolder(String sourcePath) async {
+  /// [move]가 true면 복사하지 않고 옮긴다(원본이 앱 임시 폴더의 복사본일 때).
+  Future<String> importImageFolder(String sourcePath, {bool move = false}) async {
     final source = Directory(sourcePath);
     final images = [
       await for (final entity in source.list(recursive: true, followLinks: false))
@@ -70,7 +71,11 @@ class BookStorage {
     for (final image in images) {
       final target = p.join(dir.path, name, p.relative(image.path, from: sourcePath));
       await Directory(p.dirname(target)).create(recursive: true);
-      await image.copy(target);
+      if (move) {
+        await image.rename(target);
+      } else {
+        await image.copy(target);
+      }
     }
     return name;
   }

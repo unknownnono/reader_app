@@ -35,11 +35,15 @@ class BookImporter {
   }
 
   /// 폴더 선택 창을 띄워 고른 이미지 폴더를 만화 한 권으로 추가한다. 취소하면 false.
-  Future<bool> pickAndImportFolder() async {
-    final folder = await pickFolder();
+  /// [onBusy]는 폴더를 고른 뒤 복사가 시작될 때 한 번 불린다.
+  Future<bool> pickAndImportFolder({void Function()? onBusy}) async {
+    final folder = await pickFolder(onPicked: onBusy);
     if (folder == null) return false;
     try {
-      final name = await _storage.importImageFolder(folder.path);
+      final name = await _storage.importImageFolder(
+        folder.path,
+        move: folder.isTemporaryCopy,
+      );
       await _repository.add(title: name, fileName: name, format: BookFormat.comic);
       return true;
     } finally {

@@ -65,14 +65,46 @@ class LibraryScreen extends ConsumerWidget {
 
   Future<void> _importFolder(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var busyShown = false;
+    void showBusy() {
+      busyShown = true;
+      showDialog<void>(
+        context: navigator.context,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 24),
+                Expanded(child: Text('폴더를 가져오는 중입니다…')),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    void hideBusy() {
+      if (busyShown) navigator.pop();
+      busyShown = false;
+    }
+
     try {
-      final imported = await ref.read(bookImporterProvider).pickAndImportFolder();
+      final imported = await ref
+          .read(bookImporterProvider)
+          .pickAndImportFolder(onBusy: showBusy);
+      hideBusy();
       if (imported) {
         messenger.showSnackBar(const SnackBar(content: Text('폴더를 추가했습니다.')));
       }
     } on FormatException catch (error) {
+      hideBusy();
       messenger.showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
+      hideBusy();
       messenger.showSnackBar(SnackBar(content: Text('가져오기에 실패했습니다: $error')));
     }
   }
