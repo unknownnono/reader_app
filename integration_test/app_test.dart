@@ -92,6 +92,14 @@ void main() {
     await tester.tap(find.text('제2장 끝'));
     await pumpUntil(tester, find.textContaining('마지막 문단입니다.', findRichText: true));
     expect(find.textContaining('첫 문단입니다.', findRichText: true), findsNothing);
+    // 다음 페이지는 삽화다. 그림이 실제로 디코딩되어 그려지는지 본다.
+    final page = tester.getRect(find.byType(Scaffold).first);
+    await tester.tapAt(Offset(page.right - 20, page.center.dy));
+    final illustration = find.byWidgetPredicate(
+      (widget) => widget is RawImage && widget.image != null,
+    );
+    await pumpUntil(tester, illustration);
+    expect(find.text('그림을 표시할 수 없습니다.'), findsNothing);
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
     await pumpUntil(tester, find.byType(BackButton));
     await tester.tap(find.byType(BackButton));

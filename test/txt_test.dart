@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:reader_app/formats/text_content.dart';
 import 'package:reader_app/formats/txt/txt_decoder.dart';
 import 'package:reader_app/formats/txt/txt_paginator.dart';
 
@@ -78,6 +79,36 @@ void main() {
         starts.add(end);
       }
       expect(starts.length, greaterThan(5));
+    });
+
+    test('그림은 혼자 한 페이지가 되고, 앞뒤로 넘겨도 같은 경계가 나온다', () {
+      const mixed = '$imagePlaceholder\n첫 문단\n둘째 문단\n$imagePlaceholder\n$imagePlaceholder\n끝 문단';
+      final paginator = TxtPaginator(
+        text: mixed,
+        style: style,
+        strutStyle: strut,
+        pageSize: const Size(320, 560),
+      );
+      final starts = <int>[0];
+      while (starts.last < mixed.length) {
+        starts.add(paginator.pageEnd(starts.last));
+      }
+      final pages = [
+        for (var i = 0; i + 1 < starts.length; i++) mixed.substring(starts[i], starts[i + 1]),
+      ];
+      expect(pages, [
+        '$imagePlaceholder\n',
+        '첫 문단\n둘째 문단\n',
+        '$imagePlaceholder\n',
+        '$imagePlaceholder\n',
+        '끝 문단',
+      ]);
+
+      final backward = <int>[mixed.length];
+      while (backward.last > 0) {
+        backward.add(paginator.pageStartBefore(backward.last));
+      }
+      expect(backward.reversed.toList(), starts);
     });
 
     test('뒤로 넘긴 페이지는 화면에 들어가고 현재 위치 바로 앞에서 끝난다', () {

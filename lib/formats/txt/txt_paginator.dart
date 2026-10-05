@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/painting.dart';
 
+import '../text_content.dart';
+
 /// 글자 오프셋 기준으로 페이지 경계를 계산한다.
 /// 전체를 미리 나누지 않고 현재 위치에서 한 페이지씩만 계산하므로
 /// 큰 파일도 바로 열리고, 글꼴 크기가 바뀌어도 위치를 잃지 않는다.
@@ -38,7 +40,14 @@ class TxtPaginator {
   /// [start]에서 시작하는 페이지가 끝나는 오프셋(다음 페이지의 시작).
   int pageEnd(int start) {
     if (start >= text.length) return text.length;
-    final sliceEnd = min(start + _window, text.length);
+    // 그림은 혼자 한 페이지를 차지한다.
+    if (text.codeUnitAt(start) == imagePlaceholderCode) {
+      final end = start + 1;
+      return end < text.length && text.codeUnitAt(end) == 0x0A ? end + 1 : end;
+    }
+    var sliceEnd = min(start + _window, text.length);
+    final nextImage = text.indexOf(imagePlaceholder, start);
+    if (nextImage != -1 && nextImage < sliceEnd) sliceEnd = nextImage;
     final painter = _layout(text.substring(start, sliceEnd));
     try {
       final lines = painter.computeLineMetrics();
@@ -64,10 +73,20 @@ class TxtPaginator {
   /// [end]에서 끝나는 페이지의 시작 오프셋(이전 페이지로 넘길 때 사용).
   int pageStartBefore(int end) {
     if (end <= 0) return 0;
-    final sliceStart = max(0, end - _window);
     // 끝의 개행을 그대로 두면 빈 줄 하나가 더 잡혀 한 줄을 손해 본다.
     final sliceEnd = text.codeUnitAt(end - 1) == 0x0A ? end - 1 : end;
-    if (sliceEnd <= sliceStart) return sliceStart;
+    // 바로 앞이 그림이면 그 그림이 이전 페이지다.
+    if (sliceEnd > 0 && text.codeUnitAt(sliceEnd - 1) == imagePlaceholderCode) {
+      return sliceEnd - 1;
+    }
+    var sliceStart = max(0, end - _window);
+    // 글 페이지는 앞쪽 그림을 넘어가지 않는다.
+    final previousImage = sliceEnd > 0 ? text.lastIndexOf(imagePlaceholder, sliceEnd - 1) : -1;
+    if (previousImage >= sliceStart) {
+      sliceStart = previousImage + 1;
+      if (sliceStart < sliceEnd && text.codeUnitAt(sliceStart) == 0x0A) sliceStart++;
+    }
+    if (sliceEnd <= sliceStart) return min(sliceStart, end - 1);
     final painter = _layout(text.substring(sliceStart, sliceEnd));
     try {
       final lines = painter.computeLineMetrics();

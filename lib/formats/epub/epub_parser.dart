@@ -15,12 +15,12 @@ const _blockTags = {
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6', //
 };
 const _headingTags = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'};
-const _skippedTags = {'script', 'style', 'head', 'svg', 'math'};
+const _skippedTags = {'script', 'style', 'head', 'math'};
 
 final _posix = p.posix;
 
 /// epub을 읽어 본문 전체를 하나의 텍스트로 만든다.
-/// 글자만 뽑아내므로 그림과 글꼴·색 같은 꾸밈은 빠진다.
+/// 글자와 그림 위치만 뽑아내므로 글꼴·색·정렬 같은 꾸밈은 빠진다.
 Future<TextContent> loadEpub(String path) {
   return Isolate.run(() => parseEpub(path));
 }
@@ -61,16 +61,34 @@ TextContent _parse(Archive archive) {
   // 읽는 순서(spine)대로 본문을 이어 붙이고 각 장의 시작 위치를 기억한다.
   final buffer = StringBuffer();
   final chapterOffsets = <String, int>{};
+  final images = <int, String>{};
   final spine = opf.descendantElements.firstWhere((e) => e.localName == 'spine');
   for (final ref in spine.childElements.where((e) => e.localName == 'itemref')) {
     final item = items[ref.getAttribute('idref')];
     if (item == null) continue;
     final chapterPath = pathOf(item);
     if (archive.find(chapterPath) == null) continue;
-    final text = htmlToText(read(chapterPath));
+    final chapterImages = <String>[];
+    final text = htmlToText(
+      read(chapterPath),
+      resolveImage: (src) {
+        final imagePath = _resolve(_posix.dirname(chapterPath), src.split('#').first);
+        if (archive.find(imagePath) == null) return false;
+        chapterImages.add(imagePath);
+        return true;
+      },
+    );
+    // 그림만 있는 장(표지 등)도 있으므로 글이 없어도 건너뛰지 않는다.
     if (buffer.isNotEmpty) buffer.write('\n\n');
-    chapterOffsets[chapterPath] = buffer.length;
+    final chapterStart = buffer.length;
+    chapterOffsets[chapterPath] = chapterStart;
     buffer.write(text);
+    var from = 0;
+    for (final imagePath in chapterImages) {
+      final index = text.indexOf(imagePlaceholder, from);
+      images[chapterStart + index] = imagePath;
+      from = index + 1;
+    }
   }
 
   final toc = <TextTocEntry>[];
@@ -120,7 +138,7 @@ TextContent _parse(Archive archive) {
     }
   }
 
-  return TextContent(buffer.toString(), toc: toc);
+  return TextContent(buffer.toString(), toc: toc, images: images);
 }
 
 /// [href]를 [baseDir] 기준 압축 파일 안 경로로 바꾼다. "%20" 같은 URL 인코딩도 푼다.
@@ -129,8 +147,21 @@ String _resolve(String baseDir, String href) {
   return _posix.normalize(baseDir == '.' ? decoded : _posix.join(baseDir, decoded));
 }
 
+/// svg의 image 요소에서 그림 주소를 꺼낸다. 속성 이름이 href일 수도 xlink:href일 수도 있다.
+String? _hrefOf(dom.Element image) {
+  for (final entry in image.attributes.entries) {
+    final key = entry.key;
+    final name = key is dom.AttributeName ? key.name : key.toString();
+    if (name == 'href' || name == 'xlink:href') return entry.value;
+  }
+  return null;
+}
+
 /// XHTML 한 장을 읽기용 텍스트로 바꾼다. 문단은 줄바꿈으로, 제목 뒤에는 빈 줄을 둔다.
-String htmlToText(String source) {
+///
+/// 그림을 만나면 [resolveImage]에 주소를 넘기고, true가 돌아오면 그 자리에
+/// [imagePlaceholder] 한 줄을 넣는다. [resolveImage]가 없으면 그림은 뺀다.
+String htmlToText(String source, {bool Function(String src)? resolveImage}) {
   final document = html.parse(source);
   final out = StringBuffer();
   var endsWithNewline = true;
@@ -149,13 +180,28 @@ String htmlToText(String source) {
     if (node is dom.Text) {
       // 소스의 줄바꿈과 들여쓰기는 의미가 없으므로 공백 하나로 줄이고, 줄 맨 앞에서는 버린다.
       // &nbsp;는 일부러 넣은 빈 문단일 수 있어 그대로 둔다.
-      var text = node.text.replaceAll(RegExp(r'[ \t\r\n\f]+'), ' ');
+      var text = node.text
+          .replaceAll(imagePlaceholder, '')
+          .replaceAll(RegExp(r'[ \t\r\n\f]+'), ' ');
       if (endsWithNewline && text.startsWith(' ')) text = text.substring(1);
       write(text);
       return;
     }
     if (node is! dom.Element) return;
     final tag = node.localName;
+    // 그림은 <img src>이거나, 표지에 흔한 <svg><image xlink:href> 형태다.
+    if (tag == 'img' || tag == 'svg') {
+      final sources = tag == 'img'
+          ? [node.attributes['src']]
+          : node.querySelectorAll('image').map(_hrefOf);
+      for (final src in sources) {
+        if (src == null || src.isEmpty || resolveImage == null) continue;
+        if (!resolveImage(src)) continue;
+        breakLine();
+        write('$imagePlaceholder\n');
+      }
+      return;
+    }
     if (_skippedTags.contains(tag)) return;
     if (tag == 'br') {
       write('\n');

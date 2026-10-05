@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:reader_app/formats/epub/epub_parser.dart';
+import 'package:reader_app/formats/text_content.dart';
+import 'package:reader_app/formats/zip_entry.dart';
 
 import 'support/sample_epub.dart';
 
@@ -27,8 +29,15 @@ void main() {
         content.text,
         '제1장 시작\n\n첫 문단입니다.\n둘째 문단&기호\n줄바꿈'
         '\n\n'
-        '제2장 끝\n\n마지막 문단입니다.',
+        '제2장 끝\n\n마지막 문단입니다.\n$imagePlaceholder\n$imagePlaceholder',
       );
+      // 그림 자리마다 책 안의 그림 경로가 연결된다. 없는 그림은 자리도 만들지 않는다.
+      final picOffset = content.text.indexOf(imagePlaceholder);
+      expect(content.images, {
+        picOffset: 'OEBPS/images/pic.png',
+        picOffset + 2: 'OEBPS/images/cover.png',
+      });
+      expect(await readZipEntry(file.path, content.images[picOffset]!), samplePng);
       expect(content.toc.map((e) => e.title), ['제1장 시작', '제2장 끝']);
       expect(content.toc[0].offset, 0);
       expect(content.text.substring(content.toc[1].offset), startsWith('제2장 끝'));

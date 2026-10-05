@@ -1,7 +1,40 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+
+/// 8×12 크기의 단색 PNG 그림. 실제로 디코딩되는 파일이어야 해서 규격대로 직접 만든다.
+final Uint8List samplePng = _buildPng(width: 8, height: 12);
+
+Uint8List _buildPng({required int width, required int height}) {
+  Uint8List chunk(String type, List<int> data) {
+    final body = [...ascii.encode(type), ...data];
+    final bytes = ByteData(4);
+    final out = BytesBuilder();
+    bytes.setUint32(0, data.length);
+    out.add(bytes.buffer.asUint8List().toList());
+    out.add(body);
+    bytes.setUint32(0, getCrc32(body));
+    out.add(bytes.buffer.asUint8List().toList());
+    return out.toBytes();
+  }
+
+  final header = ByteData(13)
+    ..setUint32(0, width)
+    ..setUint32(4, height)
+    ..setUint8(8, 8) // 채널당 8비트
+    ..setUint8(9, 2); // RGB
+  // 각 줄은 필터 종류(0) 한 바이트 뒤에 픽셀이 온다.
+  final row = [0, for (var x = 0; x < width; x++) ...[40, 120, 200]];
+  final pixels = [for (var y = 0; y < height; y++) ...row];
+  return Uint8List.fromList([
+    ...[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+    ...chunk('IHDR', header.buffer.asUint8List()),
+    ...chunk('IDAT', zlib.encode(pixels)),
+    ...chunk('IEND', const []),
+  ]);
+}
 
 /// 시험용 epub 파일 바이트를 만든다. 장 2개와 목차(NCX 또는 EPUB 3 nav)를 가진다.
 Uint8List buildSampleEpub({bool useNav = false}) {
@@ -50,8 +83,17 @@ Uint8List buildSampleEpub({bool useNav = false}) {
     ))
     ..addFile(text(
       'OEBPS/text/ch2.xhtml',
-      chapter('제2장 끝', '<div><p>마지막 문단입니다.</p></div><script>alert(1)</script>'),
-    ));
+      chapter(
+        '제2장 끝',
+        '<div><p>마지막 문단입니다.</p></div><script>alert(1)</script>'
+            '<p><img src="../images/pic.png" alt="삽화"/></p>'
+            '<p><img src="../images/missing.png"/></p>'
+            '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'
+            '<image xlink:href="../images/cover.png"/></svg>',
+      ),
+    ))
+    ..addFile(ArchiveFile.bytes('OEBPS/images/pic.png', samplePng))
+    ..addFile(ArchiveFile.bytes('OEBPS/images/cover.png', samplePng));
   if (useNav) {
     archive.addFile(text('OEBPS/nav.xhtml', '''
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">

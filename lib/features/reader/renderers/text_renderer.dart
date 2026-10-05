@@ -5,6 +5,7 @@ import '../../../data/db/app_database.dart';
 import '../../../domain/reading_position.dart';
 import '../../../formats/text_content.dart';
 import '../../../formats/txt/txt_paginator.dart';
+import '../../../formats/zip_entry.dart';
 import '../../../providers.dart';
 
 const _pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
@@ -27,8 +28,10 @@ class TextRenderer extends ConsumerStatefulWidget {
 }
 
 class _TextRendererState extends ConsumerState<TextRenderer> {
+  String? _path;
   String? _text;
   List<TextTocEntry> _toc = const [];
+  Map<int, String> _images = const {};
   Object? _error;
   int _start = 0;
   bool _showControls = false;
@@ -47,8 +50,10 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
       final position = await ref.read(progressRepositoryProvider).get(widget.book.id);
       if (!mounted) return;
       setState(() {
+        _path = path;
         _text = text;
         _toc = content.toc;
+        _images = content.images;
         _start = position.offset.clamp(0, text.isEmpty ? 0 : text.length - 1);
       });
     } catch (error) {
@@ -129,47 +134,58 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
       body: SafeArea(
         child: Stack(
           children: [
-            Padding(
-              padding: _pagePadding,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final paginator = TxtPaginator(
-                    text: text,
-                    style: style,
-                    strutStyle: strutStyle,
-                    pageSize: constraints.biggest,
-                  );
-                  final end = paginator.pageEnd(_start);
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (details) {
-                      final x = details.localPosition.dx / constraints.maxWidth;
-                      if (x < 1 / 3) {
-                        _goTo(paginator.pageStartBefore(_start));
-                      } else if (x > 2 / 3) {
-                        if (end < text.length) _goTo(end);
-                      } else {
-                        setState(() => _showControls = !_showControls);
-                      }
-                    },
-                    onHorizontalDragEnd: (details) {
-                      final velocity = details.primaryVelocity ?? 0;
-                      if (velocity < 0 && end < text.length) _goTo(end);
-                      if (velocity > 0) _goTo(paginator.pageStartBefore(_start));
-                    },
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final paginator = TxtPaginator(
+                  text: text,
+                  style: style,
+                  strutStyle: strutStyle,
+                  pageSize: _pagePadding.deflateSize(constraints.biggest),
+                );
+                final end = paginator.pageEnd(_start);
+                // 여백을 탭해도 넘어가도록 탭 영역은 여백 바깥까지 잡는다.
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (details) {
+                    final x = details.localPosition.dx / constraints.maxWidth;
+                    if (x < 1 / 3) {
+                      _goTo(paginator.pageStartBefore(_start));
+                    } else if (x > 2 / 3) {
+                      if (end < text.length) _goTo(end);
+                    } else {
+                      setState(() => _showControls = !_showControls);
+                    }
+                  },
+                  onHorizontalDragEnd: (details) {
+                    final velocity = details.primaryVelocity ?? 0;
+                    if (velocity < 0 && end < text.length) _goTo(end);
+                    if (velocity > 0) _goTo(paginator.pageStartBefore(_start));
+                  },
+                  child: Padding(
+                    padding: _pagePadding,
                     child: SizedBox.expand(
-                      child: RichText(
-                        text: TextSpan(
-                          text: text.substring(_start, end),
-                          style: style,
-                        ),
-                        strutStyle: strutStyle,
-                        textScaler: TextScaler.noScaling,
-                      ),
+                      child: _images.containsKey(_start)
+                          ? Image(
+                              image: ZipEntryImage(_path!, _images[_start]!),
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, _) =>
+                                  const Center(child: Text('그림을 표시할 수 없습니다.')),
+                            )
+                          : RichText(
+                              text: TextSpan(
+                                // 그림 자리 글자가 남아 있어도 화면에 찍히지 않게 한다.
+                                text: text
+                                    .substring(_start, end)
+                                    .replaceAll(imagePlaceholder, ''),
+                                style: style,
+                              ),
+                              strutStyle: strutStyle,
+                              textScaler: TextScaler.noScaling,
+                            ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
             if (_showControls) ...[
               // Slider는 주어진 높이를 다 차지하므로 막대 높이를 고정한다.

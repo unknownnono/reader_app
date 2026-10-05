@@ -6,6 +6,7 @@ import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/utils/natural_compare.dart';
+import '../zip_entry.dart';
 
 const _imageExtensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'};
 
@@ -42,8 +43,7 @@ class ComicArchive {
     final path = this.path;
     final name = _pageNames[index];
     if (_isFolder) return File(p.join(path, name)).readAsBytes();
-    // 압축 해제가 화면을 멈추지 않도록 별도 isolate에서 읽는다.
-    return Isolate.run(() => _readZipEntry(path, name));
+    return readZipEntry(path, name);
   }
 }
 
@@ -64,17 +64,6 @@ List<String> _listZip(String path) {
       for (final file in archive.files)
         if (file.isFile && isComicPage(file.name)) file.name,
     ];
-  } finally {
-    input.closeSync();
-  }
-}
-
-Uint8List _readZipEntry(String path, String name) {
-  final input = InputFileStream(path);
-  try {
-    final file = ZipDecoder().decodeStream(input).find(name);
-    if (file == null) throw StateError('압축 파일에서 $name 을(를) 찾을 수 없습니다.');
-    return file.content;
   } finally {
     input.closeSync();
   }
