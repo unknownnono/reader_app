@@ -112,7 +112,7 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
 
   void _onTap(TapUpDetails details) {
     // 갤러리가 페이지 옵션을 캐시해 두므로 방향은 탭 시점에 다시 읽는다.
-    final rightToLeft = ref.read(comicRightToLeftProvider);
+    final rightToLeft = ref.read(readerSettingsProvider).comicRightToLeft;
     final x = details.globalPosition.dx / MediaQuery.sizeOf(context).width;
     final leftSide = x < 1 / 3;
     final rightSide = x > 2 / 3;
@@ -139,7 +139,9 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
     }
 
     final theme = Theme.of(context);
-    final rightToLeft = ref.watch(comicRightToLeftProvider);
+    final rightToLeft = ref.watch(
+      readerSettingsProvider.select((settings) => settings.comicRightToLeft),
+    );
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -195,7 +197,9 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
           ),
           TextButton.icon(
             onPressed: () =>
-                ref.read(comicRightToLeftProvider.notifier).set(!rightToLeft),
+                ref
+                    .read(readerSettingsProvider.notifier)
+                    .update((s) => s.copyWith(comicRightToLeft: !rightToLeft)),
             icon: Icon(rightToLeft ? Icons.arrow_back : Icons.arrow_forward),
             label: Text(rightToLeft ? '오른쪽→왼쪽' : '왼쪽→오른쪽'),
           ),

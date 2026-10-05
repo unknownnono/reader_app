@@ -7,12 +7,10 @@ import '../../../formats/text_content.dart';
 import '../../../formats/txt/txt_paginator.dart';
 import '../../../formats/zip_entry.dart';
 import '../../../providers.dart';
+import '../../settings/reader_settings_sheet.dart';
 
-const _pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
-const _lineHeight = 1.7;
+const _verticalPadding = 16.0;
 const _barHeight = 56.0;
-const _minFontSize = 12.0;
-const _maxFontSize = 32.0;
 
 /// 글자를 페이지로 나눠 보여 주는 뷰어. txt와 epub이 함께 쓴다.
 class TextRenderer extends ConsumerStatefulWidget {
@@ -118,19 +116,25 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
     }
 
     final theme = Theme.of(context);
-    final fontSize = ref.watch(txtFontSizeProvider);
+    final settings = ref.watch(readerSettingsProvider);
+    final colors = settings.theme.colors;
+    final pagePadding = EdgeInsets.symmetric(
+      horizontal: settings.margin,
+      vertical: _verticalPadding,
+    );
     final style = theme.textTheme.bodyLarge!.copyWith(
-      fontSize: fontSize,
-      height: _lineHeight,
-      color: theme.colorScheme.onSurface,
+      fontSize: settings.fontSize,
+      height: settings.lineHeight,
+      color: colors?.text ?? theme.colorScheme.onSurface,
     );
     final strutStyle = StrutStyle(
-      fontSize: fontSize,
-      height: _lineHeight,
+      fontSize: settings.fontSize,
+      height: settings.lineHeight,
       forceStrutHeight: true,
     );
 
     return Scaffold(
+      backgroundColor: colors?.background,
       body: SafeArea(
         child: Stack(
           children: [
@@ -140,7 +144,7 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
                   text: text,
                   style: style,
                   strutStyle: strutStyle,
-                  pageSize: _pagePadding.deflateSize(constraints.biggest),
+                  pageSize: pagePadding.deflateSize(constraints.biggest),
                 );
                 final end = paginator.pageEnd(_start);
                 // 여백을 탭해도 넘어가도록 탭 영역은 여백 바깥까지 잡는다.
@@ -162,7 +166,7 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
                     if (velocity > 0) _goTo(paginator.pageStartBefore(_start));
                   },
                   child: Padding(
-                    padding: _pagePadding,
+                    padding: pagePadding,
                     child: SizedBox.expand(
                       child: _images.containsKey(_start)
                           ? Image(
@@ -191,7 +195,7 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
               // Slider는 주어진 높이를 다 차지하므로 막대 높이를 고정한다.
               Align(
                 alignment: Alignment.topCenter,
-                child: SizedBox(height: _barHeight, child: _topBar(theme, fontSize)),
+                child: SizedBox(height: _barHeight, child: _topBar(theme)),
               ),
               Align(
                 alignment: Alignment.bottomCenter,
@@ -204,8 +208,7 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
     );
   }
 
-  Widget _topBar(ThemeData theme, double fontSize) {
-    final notifier = ref.read(txtFontSizeProvider.notifier);
+  Widget _topBar(ThemeData theme) {
     return Material(
       color: theme.colorScheme.surfaceContainer,
       child: Row(
@@ -226,15 +229,9 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
               icon: const Icon(Icons.list),
             ),
           IconButton(
-            tooltip: '글자 작게',
-            onPressed: fontSize > _minFontSize ? () => notifier.set(fontSize - 1) : null,
-            icon: const Icon(Icons.text_decrease),
-          ),
-          Text('${fontSize.round()}'),
-          IconButton(
-            tooltip: '글자 크게',
-            onPressed: fontSize < _maxFontSize ? () => notifier.set(fontSize + 1) : null,
-            icon: const Icon(Icons.text_increase),
+            tooltip: '읽기 설정',
+            onPressed: () => showReaderSettingsSheet(context),
+            icon: const Icon(Icons.text_format),
           ),
         ],
       ),

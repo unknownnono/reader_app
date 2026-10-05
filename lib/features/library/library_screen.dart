@@ -270,6 +270,10 @@ class _BookTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 한 번도 열지 않은 책은 진행률이 없다.
+    final progress = ref.watch(
+      progressMapProvider.select((map) => map.value?[book.id]),
+    );
     return ListTile(
       leading: Icon(switch (book.format) {
         BookFormat.txt => Icons.description_outlined,
@@ -277,7 +281,11 @@ class _BookTile extends ConsumerWidget {
         BookFormat.comic => Icons.photo_library_outlined,
       }),
       title: Text(book.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(book.format.name.toUpperCase()),
+      subtitle: Text(
+        progress == null
+            ? book.format.name.toUpperCase()
+            : '${book.format.name.toUpperCase()} · ${(progress * 100).round()}%',
+      ),
       onTap: () {
         ref.read(bookRepositoryProvider).markOpened(book.id);
         Navigator.of(context).push(

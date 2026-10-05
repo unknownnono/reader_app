@@ -9,6 +9,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:reader_app/app/app.dart';
+import 'package:reader_app/providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test/support/sample_epub.dart';
 
@@ -66,7 +68,13 @@ void main() {
     final epubTitle = '시험전자책 $tag';
     await File(p.join(docs.path, '$epubTitle.epub')).writeAsBytes(buildSampleEpub());
 
-    await tester.pumpWidget(const ProviderScope(child: ReaderApp()));
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: const ReaderApp(),
+      ),
+    );
     await pumpUntil(tester, find.text('앱 폴더에서 3권을 추가했습니다.'));
     // 가져온 것은 앱 폴더에서 books로 옮겨진다.
     expect(await comicDir.exists(), isFalse);
@@ -75,9 +83,23 @@ void main() {
     await tester.scrollUntilVisible(find.text(novelTitle), 300);
     await tester.tap(find.text(novelTitle));
     await pumpUntil(tester, find.textContaining('가나다라', findRichText: true));
-    // 메뉴를 띄워 뒤로 간다.
+    // 메뉴를 띄운다.
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
     await pumpUntil(tester, find.byType(BackButton));
+
+    // 읽기 설정을 바꾸면 바로 기기에 저장된다. 확인 뒤 원래대로 돌려놓는다.
+    await tester.tap(find.byTooltip('읽기 설정'));
+    await pumpUntil(tester, find.text('세피아'));
+    await tester.tap(find.text('세피아'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(prefs.getString('reader.theme'), 'sepia');
+    await tester.tap(find.text('자동'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(prefs.getString('reader.theme'), 'system');
+    // 설정 창 바깥을 눌러 닫는다.
+    await tester.tapAt(const Offset(30, 200));
+    await tester.pump(const Duration(milliseconds: 600));
+
     await tester.tap(find.byType(BackButton));
     await pumpUntil(tester, find.text('서재'));
 

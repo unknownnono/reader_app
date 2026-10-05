@@ -20,6 +20,13 @@ class ProgressRepository {
     );
   }
 
+  /// 책 id → 진행률
+  Stream<Map<int, double>> watchAll() {
+    return _db.select(_db.readingProgress).watch().map(
+          (rows) => {for (final row in rows) row.bookId: row.progress},
+        );
+  }
+
   Future<void> save(int bookId, ReadingPosition position) {
     return _db.into(_db.readingProgress).insertOnConflictUpdate(
           ReadingProgressCompanion.insert(
