@@ -39,6 +39,17 @@ class TxtFontSize extends Notifier<double> {
 
 final txtFontSizeProvider = NotifierProvider<TxtFontSize, double>(TxtFontSize.new);
 
-final booksProvider =StreamProvider<List<Book>>(
+/// 만화 넘김 방향. 일본 만화는 오른쪽에서 왼쪽으로 읽는다. 아직 저장하지 않는다.
+class ComicRightToLeft extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}
+
+final comicRightToLeftProvider =
+    NotifierProvider<ComicRightToLeft, bool>(ComicRightToLeft.new);
+
+final booksProvider = StreamProvider<List<Book>>(
   (ref) => ref.watch(bookRepositoryProvider).watchAll(),
 );
