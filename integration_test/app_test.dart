@@ -10,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:reader_app/app/app.dart';
 
+import '../test/support/sample_epub.dart';
+
 /// 실제 기기/시뮬레이터에서 앱을 띄워 확인한다.
 /// 앱 폴더에 넣은 만화 폴더와 CP949 txt가 서재에 들어오고 열리는지 본다.
 void main() {
@@ -61,8 +63,11 @@ void main() {
     await File(p.join(docs.path, '$novelTitle.txt'))
         .writeAsBytes([0xB0, 0xA1, 0xB3, 0xAA, 0xB4, 0xD9, 0xB6, 0xF3]);
 
+    final epubTitle = '시험전자책 $tag';
+    await File(p.join(docs.path, '$epubTitle.epub')).writeAsBytes(buildSampleEpub());
+
     await tester.pumpWidget(const ProviderScope(child: ReaderApp()));
-    await pumpUntil(tester, find.text('앱 폴더에서 2권을 추가했습니다.'));
+    await pumpUntil(tester, find.text('앱 폴더에서 3권을 추가했습니다.'));
     // 가져온 것은 앱 폴더에서 books로 옮겨진다.
     expect(await comicDir.exists(), isFalse);
 
@@ -71,6 +76,22 @@ void main() {
     await tester.tap(find.text(novelTitle));
     await pumpUntil(tester, find.textContaining('가나다라', findRichText: true));
     // 메뉴를 띄워 뒤로 간다.
+    await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
+    await pumpUntil(tester, find.byType(BackButton));
+    await tester.tap(find.byType(BackButton));
+    await pumpUntil(tester, find.text('서재'));
+
+    // epub 본문이 열리고, 목차로 2장으로 이동할 수 있다.
+    await tester.scrollUntilVisible(find.text(epubTitle), 300);
+    await tester.tap(find.text(epubTitle));
+    await pumpUntil(tester, find.textContaining('첫 문단입니다.', findRichText: true));
+    await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
+    await pumpUntil(tester, find.byTooltip('목차'));
+    await tester.tap(find.byTooltip('목차'));
+    await pumpUntil(tester, find.text('제2장 끝'));
+    await tester.tap(find.text('제2장 끝'));
+    await pumpUntil(tester, find.textContaining('마지막 문단입니다.', findRichText: true));
+    expect(find.textContaining('첫 문단입니다.', findRichText: true), findsNothing);
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
     await pumpUntil(tester, find.byType(BackButton));
     await tester.tap(find.byType(BackButton));

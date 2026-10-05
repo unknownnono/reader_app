@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/db/app_database.dart';
 import '../../../domain/reading_position.dart';
-import '../../../formats/txt/txt_decoder.dart';
+import '../../../formats/text_content.dart';
 import '../../../formats/txt/txt_paginator.dart';
 import '../../../providers.dart';
 
@@ -13,10 +13,14 @@ const _barHeight = 56.0;
 const _minFontSize = 12.0;
 const _maxFontSize = 32.0;
 
+/// 글자를 페이지로 나눠 보여 주는 뷰어. txt와 epub이 함께 쓴다.
 class TextRenderer extends ConsumerStatefulWidget {
-  const TextRenderer({super.key, required this.book});
+  const TextRenderer({super.key, required this.book, required this.loader});
 
   final Book book;
+
+  /// 책 파일 경로를 받아 본문을 읽어 오는 함수. 포맷마다 다르다.
+  final Future<TextContent> Function(String path) loader;
 
   @override
   ConsumerState<TextRenderer> createState() => _TextRendererState();
@@ -24,6 +28,7 @@ class TextRenderer extends ConsumerStatefulWidget {
 
 class _TextRendererState extends ConsumerState<TextRenderer> {
   String? _text;
+  List<TextTocEntry> _toc = const [];
   Object? _error;
   int _start = 0;
   bool _showControls = false;
@@ -36,17 +41,41 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
 
   Future<void> _load() async {
     try {
-      final file = await ref.read(bookStorageProvider).fileFor(widget.book.fileName);
-      final text = await decodeTxt(await file.readAsBytes());
+      final path = await ref.read(bookStorageProvider).pathFor(widget.book.fileName);
+      final content = await widget.loader(path);
+      final text = content.text;
       final position = await ref.read(progressRepositoryProvider).get(widget.book.id);
       if (!mounted) return;
       setState(() {
         _text = text;
+        _toc = content.toc;
         _start = position.offset.clamp(0, text.isEmpty ? 0 : text.length - 1);
       });
     } catch (error) {
       if (mounted) setState(() => _error = error);
     }
+  }
+
+  void _showToc() {
+    // 지금 읽는 위치가 속한 항목을 표시한다.
+    final current = _toc.lastIndexWhere((entry) => entry.offset <= _start);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView.builder(
+          itemCount: _toc.length,
+          itemBuilder: (context, index) => ListTile(
+            title: Text(_toc[index].title, maxLines: 2, overflow: TextOverflow.ellipsis),
+            selected: index == current,
+            onTap: () {
+              Navigator.pop(sheetContext);
+              setState(() => _showControls = false);
+              _goTo(_toc[index].offset);
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   void _goTo(int offset) {
@@ -174,6 +203,12 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
               style: theme.textTheme.titleMedium,
             ),
           ),
+          if (_toc.isNotEmpty)
+            IconButton(
+              tooltip: '목차',
+              onPressed: _showToc,
+              icon: const Icon(Icons.list),
+            ),
           IconButton(
             tooltip: '글자 작게',
             onPressed: fontSize > _minFontSize ? () => notifier.set(fontSize - 1) : null,

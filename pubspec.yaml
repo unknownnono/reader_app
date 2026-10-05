@@ -44,6 +44,8 @@ dependencies:
   charset_converter: ^2.5.1
   photo_view: ^0.15.0
   permission_handler: ^13.0.2
+  xml: ^7.1.0
+  html: ^0.15.7
 
 dev_dependencies:
   flutter_test:

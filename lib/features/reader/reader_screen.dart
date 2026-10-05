@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../data/db/app_database.dart';
 import '../../domain/book_format.dart';
+import '../../formats/epub/epub_parser.dart';
+import '../../formats/text_content.dart';
+import '../../formats/txt/txt_decoder.dart';
 import 'renderers/comic_renderer.dart';
 import 'renderers/text_renderer.dart';
 
@@ -14,17 +19,13 @@ class ReaderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (book.format) {
-      BookFormat.txt => TextRenderer(book: book),
+      BookFormat.txt => TextRenderer(book: book, loader: _loadTxt),
+      BookFormat.epub => TextRenderer(book: book, loader: loadEpub),
       BookFormat.comic => ComicRenderer(book: book),
-      // TODO: 4단계에서 epub 렌더러로 교체
-      BookFormat.epub => _placeholder('epub 뷰어는 4단계에서 구현합니다.'),
     };
   }
+}
 
-  Widget _placeholder(String message) {
-    return Scaffold(
-      appBar: AppBar(title: Text(book.title)),
-      body: Center(child: Text(message)),
-    );
-  }
+Future<TextContent> _loadTxt(String path) async {
+  return TextContent(await decodeTxt(await File(path).readAsBytes()));
 }
