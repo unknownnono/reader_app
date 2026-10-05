@@ -77,10 +77,10 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
 
   Future<void> _load() async {
     try {
-      final file = await ref.read(bookStorageProvider).fileFor(widget.book.fileName);
-      final archive = await ComicArchive.open(file.path);
+      final path = await ref.read(bookStorageProvider).pathFor(widget.book.fileName);
+      final archive = await ComicArchive.open(path);
       if (archive.pageCount == 0) {
-        throw const FormatException('압축 파일 안에 이미지가 없습니다.');
+        throw const FormatException('이미지가 없습니다.');
       }
       final position = await ref.read(progressRepositoryProvider).get(widget.book.id);
       if (!mounted) return;

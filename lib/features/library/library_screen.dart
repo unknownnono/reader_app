@@ -25,11 +25,56 @@ class LibraryScreen extends ConsumerWidget {
               ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _import(context, ref),
-        tooltip: '파일 가져오기',
+        onPressed: () => _showImportMenu(context, ref),
+        tooltip: '가져오기',
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  void _showImportMenu(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('파일 가져오기'),
+              subtitle: const Text('txt, epub, zip, cbz'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _import(context, ref);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_outlined),
+              title: const Text('이미지 폴더 가져오기'),
+              subtitle: const Text('폴더 하나를 만화 한 권으로 추가'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _importFolder(context, ref);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _importFolder(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final imported = await ref.read(bookImporterProvider).pickAndImportFolder();
+      if (imported) {
+        messenger.showSnackBar(const SnackBar(content: Text('폴더를 추가했습니다.')));
+      }
+    } on FormatException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('가져오기에 실패했습니다: $error')));
+    }
   }
 
   Future<void> _import(BuildContext context, WidgetRef ref) async {
@@ -94,6 +139,6 @@ class _BookTile extends ConsumerWidget {
     );
     if (confirmed != true) return;
     await ref.read(bookRepositoryProvider).delete(book.id);
-    await ref.read(bookStorageProvider).deleteFile(book.fileName);
+    await ref.read(bookStorageProvider).delete(book.fileName);
   }
 }

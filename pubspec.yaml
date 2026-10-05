@@ -43,6 +43,7 @@ dependencies:
   archive: ^4.3.0
   charset_converter: ^2.5.1
   photo_view: ^0.15.0
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:

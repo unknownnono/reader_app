@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.ambteams.reader_app"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler가 37 이상을 요구한다.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../core/platform/folder_picker.dart';
 import '../../../core/storage/book_storage.dart';
 import '../../../data/book_repository.dart';
 import '../../../domain/book_format.dart';
@@ -29,6 +32,21 @@ class BookImporter {
       for (final file in files)
         if (file.path != null) file.path!,
     ]);
+  }
+
+  /// 폴더 선택 창을 띄워 고른 이미지 폴더를 만화 한 권으로 추가한다. 취소하면 false.
+  Future<bool> pickAndImportFolder() async {
+    final folder = await pickFolder();
+    if (folder == null) return false;
+    try {
+      final name = await _storage.importImageFolder(folder.path);
+      await _repository.add(title: name, fileName: name, format: BookFormat.comic);
+      return true;
+    } finally {
+      if (folder.isTemporaryCopy) {
+        await Directory(folder.path).delete(recursive: true);
+      }
+    }
   }
 
   Future<ImportResult> importPaths(List<String> paths) async {
