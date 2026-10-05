@@ -13,6 +13,7 @@ import '../../../domain/reading_position.dart';
 import '../../../formats/comic/comic_archive.dart';
 import '../../../providers.dart';
 import '../../settings/comic_settings_sheet.dart';
+import '../bookmark_list.dart';
 import '../comic_layout.dart';
 
 const _barHeight = 56.0;
@@ -353,7 +354,43 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
     );
   }
 
+  void _toggleBookmark(List<Bookmark> onThisPage) {
+    final repository = ref.read(bookmarkRepositoryProvider);
+    if (onThisPage.isNotEmpty) {
+      for (final bookmark in onThisPage) {
+        repository.delete(bookmark.id);
+      }
+    } else {
+      repository.add(bookId: widget.book.id, position: _page, label: '${_page + 1}쪽');
+    }
+  }
+
+  void _showBookmarks() {
+    final pageCount = _layout.pageCount;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: BookmarkList(
+          bookId: widget.book.id,
+          detailOf: (bookmark) => '전체 $pageCount쪽',
+          onOpen: (bookmark) {
+            Navigator.pop(sheetContext);
+            setState(() => _showControls = false);
+            _jumpTo(bookmark.position.clamp(0, pageCount - 1));
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _topBar(ThemeData theme) {
+    // 지금 화면에 보이는 쪽에 걸린 북마크
+    final shown = _atEnd ? const <int>[] : _layout.pagesOf(_layout.unitOf(_page));
+    final onThisPage = [
+      for (final bookmark
+          in ref.watch(bookmarksProvider(widget.book.id)).value ?? const <Bookmark>[])
+        if (shown.contains(bookmark.position)) bookmark,
+    ];
     return Material(
       color: theme.colorScheme.surfaceContainer,
       child: Row(
@@ -366,6 +403,17 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleMedium,
             ),
+          ),
+          if (!_atEnd)
+            IconButton(
+              tooltip: onThisPage.isEmpty ? '북마크 추가' : '북마크 해제',
+              onPressed: () => _toggleBookmark(onThisPage),
+              icon: Icon(onThisPage.isEmpty ? Icons.bookmark_border : Icons.bookmark),
+            ),
+          IconButton(
+            tooltip: '북마크 목록',
+            onPressed: _showBookmarks,
+            icon: const Icon(Icons.bookmarks_outlined),
           ),
           IconButton(
             tooltip: '만화 설정',

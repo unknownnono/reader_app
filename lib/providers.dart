@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/storage/book_storage.dart';
 import 'core/utils/natural_compare.dart';
 import 'data/book_repository.dart';
+import 'data/bookmark_repository.dart';
 import 'data/db/app_database.dart';
 import 'data/progress_repository.dart';
 import 'data/settings_repository.dart';
@@ -33,6 +34,15 @@ final bookImporterProvider = Provider<BookImporter>(
 
 final progressRepositoryProvider = Provider<ProgressRepository>(
   (ref) => ProgressRepository(ref.watch(databaseProvider)),
+);
+
+final bookmarkRepositoryProvider = Provider<BookmarkRepository>(
+  (ref) => BookmarkRepository(ref.watch(databaseProvider)),
+);
+
+/// 책 id → 그 책의 북마크(앞쪽부터)
+final bookmarksProvider = StreamProvider.family<List<Bookmark>, int>(
+  (ref, bookId) => ref.watch(bookmarkRepositoryProvider).watchFor(bookId),
 );
 
 /// 설정 저장소. main()에서 실제 인스턴스로 바꿔 넣는다. 없으면 설정을 저장하지 않는다.

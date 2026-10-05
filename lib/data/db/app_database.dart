@@ -31,16 +31,33 @@ class ReadingProgress extends Table {
   Set<Column> get primaryKey => {bookId};
 }
 
-@DriftDatabase(tables: [Books, ReadingProgress])
+class Bookmarks extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bookId =>
+      integer().references(Books, #id, onDelete: KeyAction.cascade)();
+
+  /// txt·epub은 글자 오프셋, 만화는 쪽 번호(0부터)
+  IntColumn get position => integer()();
+
+  /// 목록에 보여 줄 글. 그 자리의 첫 문장이나 "12쪽" 같은 표시다.
+  TextColumn get label => text()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+@DriftDatabase(tables: [Books, ReadingProgress, Bookmarks])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'reader_app'));
 
+  /// 2: 북마크 표 추가
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (migrator, from, to) async {
+          if (from < 2) await migrator.createTable(bookmarks);
+        },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
         },

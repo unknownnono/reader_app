@@ -8,6 +8,8 @@ import '../../../formats/txt/txt_paginator.dart';
 import '../../../formats/zip_entry.dart';
 import '../../../providers.dart';
 import '../../settings/reader_settings_sheet.dart';
+import '../bookmark_list.dart';
+import '../text_search.dart';
 
 const _verticalPadding = 16.0;
 const _barHeight = 56.0;
@@ -34,6 +36,13 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
   int _start = 0;
   bool _showControls = false;
 
+  /// 화면을 그릴 때 쓴 페이지 계산기와 지금 페이지의 끝. 검색·북마크에서 페이지 경계를 찾는 데 쓴다.
+  TxtPaginator? _paginator;
+  int _pageEnd = 0;
+
+  /// 본문 검색으로 찾아간 말. 그 페이지에서 눈에 띄게 표시한다.
+  String? _highlight;
+
   @override
   void initState() {
     super.initState();
@@ -59,26 +68,145 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
     }
   }
 
-  void _showToc() {
+  /// 목차와 북마크를 탭으로 나눠 보여 준다. 목차가 없는 책(txt)은 북마크만 나온다.
+  void _showContents() {
+    final text = _text!;
     // 지금 읽는 위치가 속한 항목을 표시한다.
     final current = _toc.lastIndexWhere((entry) => entry.offset <= _start);
+    void open(int offset) {
+      Navigator.pop(context);
+      setState(() => _showControls = false);
+      _goTo(offset);
+    }
+
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: ListView.builder(
-          itemCount: _toc.length,
-          itemBuilder: (context, index) => ListTile(
-            title: Text(_toc[index].title, maxLines: 2, overflow: TextOverflow.ellipsis),
-            selected: index == current,
-            onTap: () {
-              Navigator.pop(sheetContext);
-              setState(() => _showControls = false);
-              _goTo(_toc[index].offset);
-            },
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.6,
+          child: DefaultTabController(
+            length: _toc.isEmpty ? 1 : 2,
+            child: Column(
+              children: [
+                TabBar(
+                  tabs: [
+                    if (_toc.isNotEmpty) const Tab(text: '목차'),
+                    const Tab(text: '북마크'),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      if (_toc.isNotEmpty)
+                        ListView.builder(
+                          itemCount: _toc.length,
+                          itemBuilder: (context, index) => ListTile(
+                            title: Text(
+                              _toc[index].title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            selected: index == current,
+                            onTap: () => open(_toc[index].offset),
+                          ),
+                        ),
+                      BookmarkList(
+                        bookId: widget.book.id,
+                        onOpen: (bookmark) => open(bookmark.position),
+                        detailOf: (bookmark) => text.isEmpty
+                            ? ''
+                            : '${(bookmark.position * 100 / text.length).toStringAsFixed(1)}%',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  /// 지금 보는 페이지에 북마크가 있으면 지우고, 없으면 만든다.
+  void _toggleBookmark(List<Bookmark> onThisPage) {
+    final repository = ref.read(bookmarkRepositoryProvider);
+    if (onThisPage.isNotEmpty) {
+      for (final bookmark in onThisPage) {
+        repository.delete(bookmark.id);
+      }
+      return;
+    }
+    final text = _text!;
+    final preview = text
+        .substring(_start, (_start + 60).clamp(0, text.length))
+        .replaceAll(imagePlaceholder, '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    repository.add(
+      bookId: widget.book.id,
+      position: _start,
+      label: preview.isEmpty ? '그림' : preview,
+    );
+  }
+
+  Future<void> _openSearch() async {
+    final result = await Navigator.of(context).push<(int, String)>(
+      MaterialPageRoute(
+        builder: (_) => TextSearchScreen(text: _text!, initialQuery: _highlight ?? ''),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _highlight = result.$2;
+      _showControls = false;
+    });
+    _goToContaining(result.$1);
+  }
+
+  /// [offset]이 들어 있는 페이지로 간다.
+  /// 문단 처음에서 시작하되, 문단이 길어 그 글자가 뒤 페이지로 밀리면 거기까지 넘긴다.
+  void _goToContaining(int offset) {
+    var start = _snapToLineStart(offset);
+    final paginator = _paginator;
+    if (paginator != null) {
+      for (var turns = 0; turns < 50; turns++) {
+        final end = paginator.pageEnd(start);
+        if (end > offset || end <= start) break;
+        start = end;
+      }
+    }
+    _goTo(start);
+  }
+
+  /// 손으로 한 장 넘긴다. 검색어 표시는 찾아간 페이지에서만 보여 주고 지운다.
+  void _turnTo(int offset) {
+    _highlight = null;
+    _goTo(offset);
+  }
+
+  /// 검색어가 있으면 그 부분에 바탕색을 칠한다. 글자 배치는 바뀌지 않는다.
+  List<TextSpan> _spans(String page, Color markColor) {
+    final query = _highlight?.toLowerCase();
+    final lower = page.toLowerCase();
+    if (query == null || query.isEmpty || lower.length != page.length) {
+      return [TextSpan(text: page)];
+    }
+    final spans = <TextSpan>[];
+    var from = 0;
+    for (var index = lower.indexOf(query); index != -1; index = lower.indexOf(query, from)) {
+      if (index > from) spans.add(TextSpan(text: page.substring(from, index)));
+      from = index + query.length;
+      spans.add(
+        TextSpan(
+          text: page.substring(index, from),
+          style: TextStyle(backgroundColor: markColor),
+        ),
+      );
+    }
+    spans.add(TextSpan(text: page.substring(from)));
+    return spans;
   }
 
   void _goTo(int offset) {
@@ -146,24 +274,26 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
                   strutStyle: strutStyle,
                   pageSize: pagePadding.deflateSize(constraints.biggest),
                 );
+                _paginator = paginator;
                 final end = paginator.pageEnd(_start);
+                _pageEnd = end;
                 // 여백을 탭해도 넘어가도록 탭 영역은 여백 바깥까지 잡는다.
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (details) {
                     final x = details.localPosition.dx / constraints.maxWidth;
                     if (x < 1 / 3) {
-                      _goTo(paginator.pageStartBefore(_start));
+                      _turnTo(paginator.pageStartBefore(_start));
                     } else if (x > 2 / 3) {
-                      if (end < text.length) _goTo(end);
+                      if (end < text.length) _turnTo(end);
                     } else {
                       setState(() => _showControls = !_showControls);
                     }
                   },
                   onHorizontalDragEnd: (details) {
                     final velocity = details.primaryVelocity ?? 0;
-                    if (velocity < 0 && end < text.length) _goTo(end);
-                    if (velocity > 0) _goTo(paginator.pageStartBefore(_start));
+                    if (velocity < 0 && end < text.length) _turnTo(end);
+                    if (velocity > 0) _turnTo(paginator.pageStartBefore(_start));
                   },
                   child: Padding(
                     padding: pagePadding,
@@ -177,11 +307,14 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
                             )
                           : RichText(
                               text: TextSpan(
-                                // 그림 자리 글자가 남아 있어도 화면에 찍히지 않게 한다.
-                                text: text
-                                    .substring(_start, end)
-                                    .replaceAll(imagePlaceholder, ''),
                                 style: style,
+                                children: _spans(
+                                  // 그림 자리 글자가 남아 있어도 화면에 찍히지 않게 한다.
+                                  text
+                                      .substring(_start, end)
+                                      .replaceAll(imagePlaceholder, ''),
+                                  theme.colorScheme.tertiaryContainer,
+                                ),
                               ),
                               strutStyle: strutStyle,
                               textScaler: TextScaler.noScaling,
@@ -209,6 +342,12 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
   }
 
   Widget _topBar(ThemeData theme) {
+    // 지금 페이지 범위 안에 있는 북마크
+    final onThisPage = [
+      for (final bookmark
+          in ref.watch(bookmarksProvider(widget.book.id)).value ?? const <Bookmark>[])
+        if (bookmark.position >= _start && bookmark.position < _pageEnd) bookmark,
+    ];
     return Material(
       color: theme.colorScheme.surfaceContainer,
       child: Row(
@@ -222,12 +361,21 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
               style: theme.textTheme.titleMedium,
             ),
           ),
-          if (_toc.isNotEmpty)
-            IconButton(
-              tooltip: '목차',
-              onPressed: _showToc,
-              icon: const Icon(Icons.list),
-            ),
+          IconButton(
+            tooltip: onThisPage.isEmpty ? '북마크 추가' : '북마크 해제',
+            onPressed: () => _toggleBookmark(onThisPage),
+            icon: Icon(onThisPage.isEmpty ? Icons.bookmark_border : Icons.bookmark),
+          ),
+          IconButton(
+            tooltip: '목차·북마크',
+            onPressed: _showContents,
+            icon: const Icon(Icons.list),
+          ),
+          IconButton(
+            tooltip: '본문 검색',
+            onPressed: _openSearch,
+            icon: const Icon(Icons.search),
+          ),
           IconButton(
             tooltip: '읽기 설정',
             onPressed: () => showReaderSettingsSheet(context),

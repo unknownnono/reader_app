@@ -111,6 +111,28 @@ void main() {
     await tester.tapAt(const Offset(30, 200));
     await tester.pump(const Duration(milliseconds: 600));
 
+    // 북마크를 추가하면 목록에 나오고, 목록에서 지울 수 있다.
+    await tester.tap(find.byTooltip('북마크 추가'));
+    await pumpUntil(tester, find.byTooltip('북마크 해제'));
+    await tester.tap(find.byTooltip('목차·북마크'));
+    await pumpUntil(tester, find.byTooltip('북마크 삭제'));
+    await tester.tap(find.byTooltip('북마크 삭제'));
+    await pumpUntil(tester, find.textContaining('북마크가 없습니다'));
+    await tester.tapAt(const Offset(30, 200));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    // 본문 검색 결과를 누르면 그 글이 있는 페이지로 간다.
+    await tester.tap(find.byTooltip('본문 검색'));
+    await pumpUntil(tester, find.text('찾을 말을 입력하세요.'));
+    await tester.enterText(find.byType(TextField), '다라');
+    await pumpUntil(tester, find.text('1곳에서 찾았습니다.'));
+    await tester.tap(find.textContaining('가나다라').last);
+    await pumpUntil(tester, find.textContaining('가나다라', findRichText: true));
+    expect(find.text('1곳에서 찾았습니다.'), findsNothing);
+    // 검색으로 이동하면 메뉴가 닫히므로 다시 띄운다.
+    await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
+    await pumpUntil(tester, find.byType(BackButton));
+
     await tester.tap(find.byType(BackButton));
     await pumpUntil(tester, find.text('서재'));
 
@@ -119,8 +141,8 @@ void main() {
     await tester.tap(bookTitle(epubTitle));
     await pumpUntil(tester, find.textContaining('첫 문단입니다.', findRichText: true));
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
-    await pumpUntil(tester, find.byTooltip('목차'));
-    await tester.tap(find.byTooltip('목차'));
+    await pumpUntil(tester, find.byTooltip('목차·북마크'));
+    await tester.tap(find.byTooltip('목차·북마크'));
     await pumpUntil(tester, find.text('제2장 끝'));
     await tester.tap(find.text('제2장 끝'));
     await pumpUntil(tester, find.textContaining('마지막 문단입니다.', findRichText: true));
