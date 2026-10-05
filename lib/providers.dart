@@ -4,7 +4,9 @@ import 'core/storage/book_storage.dart';
 import 'data/book_repository.dart';
 import 'data/db/app_database.dart';
 import 'data/progress_repository.dart';
+import 'core/utils/natural_compare.dart';
 import 'features/library/import/book_importer.dart';
+import 'features/library/import/inbox_scanner.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
@@ -50,6 +52,19 @@ class ComicRightToLeft extends Notifier<bool> {
 final comicRightToLeftProvider =
     NotifierProvider<ComicRightToLeft, bool>(ComicRightToLeft.new);
 
+final inboxScannerProvider = Provider<InboxScanner>(
+  (ref) => InboxScanner(
+    ref.watch(bookStorageProvider),
+    ref.watch(bookRepositoryProvider),
+  ),
+);
+
+/// 읽은 책은 최근에 읽은 순으로 위에, 아직 안 읽은 책은 제목 순(1권, 2권, … 10권)으로 그 아래에 둔다.
 final booksProvider = StreamProvider<List<Book>>(
-  (ref) => ref.watch(bookRepositoryProvider).watchAll(),
+  (ref) => ref.watch(bookRepositoryProvider).watchAll().map((books) {
+    final read = books.where((b) => b.lastReadAt != null);
+    final unread = books.where((b) => b.lastReadAt == null).toList()
+      ..sort((a, b) => naturalCompare(a.title, b.title));
+    return [...read, ...unread];
+  }),
 );
