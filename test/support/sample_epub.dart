@@ -66,8 +66,11 @@ Uint8List buildSampleEpub({bool useNav = false}) {
 <package xmlns="http://www.idpf.org/2007/opf" version="${useNav ? '3.0' : '2.0'}">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>시험 소설</dc:title>
+    ${useNav ? '' : '<meta name="cover" content="cover-img"/>'}
   </metadata>
   <manifest>
+    <item id="pic" href="images/pic.png" media-type="image/png"/>
+    <item id="cover-img" href="images/cover.png" media-type="image/png"${useNav ? ' properties="cover-image"' : ''}/>
     <item id="ch1" href="text/ch%201.xhtml" media-type="application/xhtml+xml"/>
     <item id="ch2" href="text/ch2.xhtml" media-type="application/xhtml+xml"/>
     ${useNav ? '<item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>' : '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'}

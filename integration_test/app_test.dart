@@ -36,6 +36,9 @@ void main() {
     fail('시간 안에 나타나지 않음: $finder');
   }
 
+  // 표지 자리에도 제목이 적히므로 책 항목의 제목 글자(마지막 것)를 고른다.
+  Finder bookTitle(String title) => find.text(title).last;
+
   Future<List<int>> pngPage(int number) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -80,8 +83,8 @@ void main() {
     expect(await comicDir.exists(), isFalse);
 
     // CP949 txt가 한글로 열린다. 서재에 책이 많으면 화면 밖에 있을 수 있어 스크롤해서 찾는다.
-    await tester.scrollUntilVisible(find.text(novelTitle), 300);
-    await tester.tap(find.text(novelTitle));
+    await tester.scrollUntilVisible(bookTitle(novelTitle), 300);
+    await tester.tap(bookTitle(novelTitle));
     await pumpUntil(tester, find.textContaining('가나다라', findRichText: true));
     // 메뉴를 띄운다.
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
@@ -104,8 +107,8 @@ void main() {
     await pumpUntil(tester, find.text('서재'));
 
     // epub 본문이 열리고, 목차로 2장으로 이동할 수 있다.
-    await tester.scrollUntilVisible(find.text(epubTitle), 300);
-    await tester.tap(find.text(epubTitle));
+    await tester.scrollUntilVisible(bookTitle(epubTitle), 300);
+    await tester.tap(bookTitle(epubTitle));
     await pumpUntil(tester, find.textContaining('첫 문단입니다.', findRichText: true));
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
     await pumpUntil(tester, find.byTooltip('목차'));
@@ -128,8 +131,8 @@ void main() {
     await pumpUntil(tester, find.text('서재'));
 
     // 만화가 열리고 쪽수가 맞다.
-    await tester.scrollUntilVisible(find.text(comicTitle), 300);
-    await tester.tap(find.text(comicTitle));
+    await tester.scrollUntilVisible(bookTitle(comicTitle), 300);
+    await tester.tap(bookTitle(comicTitle));
     await pumpUntil(tester, find.byType(PhotoViewGallery));
     expect(find.textContaining('파일을 열지 못했습니다'), findsNothing);
     await tester.tapAt(tester.getCenter(find.byType(PhotoViewGallery)));

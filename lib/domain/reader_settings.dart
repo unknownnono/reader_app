@@ -29,7 +29,18 @@ enum ReaderTheme {
       };
 }
 
-/// 읽기 화면 설정. 앱을 꺼도 유지된다.
+/// 서재 정렬 방식
+enum LibrarySort {
+  recent('최근 읽은 순'),
+  title('제목 순'),
+  added('추가한 순');
+
+  const LibrarySort(this.label);
+
+  final String label;
+}
+
+/// 읽기 화면과 서재 설정. 앱을 꺼도 유지된다.
 class ReaderSettings {
   const ReaderSettings({
     this.fontSize = 18,
@@ -37,6 +48,8 @@ class ReaderSettings {
     this.margin = 20,
     this.theme = ReaderTheme.system,
     this.comicRightToLeft = false,
+    this.libraryGrid = true,
+    this.librarySort = LibrarySort.recent,
   });
 
   static const minFontSize = 12.0;
@@ -56,12 +69,18 @@ class ReaderSettings {
   /// 만화 넘김 방향. 일본 만화는 오른쪽에서 왼쪽으로 읽는다.
   final bool comicRightToLeft;
 
+  /// 서재를 표지 격자로 볼지(true) 목록으로 볼지(false)
+  final bool libraryGrid;
+  final LibrarySort librarySort;
+
   ReaderSettings copyWith({
     double? fontSize,
     double? lineHeight,
     double? margin,
     ReaderTheme? theme,
     bool? comicRightToLeft,
+    bool? libraryGrid,
+    LibrarySort? librarySort,
   }) {
     return ReaderSettings(
       fontSize: (fontSize ?? this.fontSize).clamp(minFontSize, maxFontSize),
@@ -69,6 +88,8 @@ class ReaderSettings {
       margin: (margin ?? this.margin).clamp(minMargin, maxMargin),
       theme: theme ?? this.theme,
       comicRightToLeft: comicRightToLeft ?? this.comicRightToLeft,
+      libraryGrid: libraryGrid ?? this.libraryGrid,
+      librarySort: librarySort ?? this.librarySort,
     );
   }
 }

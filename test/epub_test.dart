@@ -38,6 +38,8 @@ void main() {
         picOffset + 2: 'OEBPS/images/cover.png',
       });
       expect(await readZipEntry(file.path, content.images[picOffset]!), samplePng);
+      // 표지로 표시된 그림을 찾는다(EPUB 2는 meta, EPUB 3은 properties). 목록의 첫 그림이 아니다.
+      expect(findEpubCover(file.path), 'OEBPS/images/cover.png');
       expect(content.toc.map((e) => e.title), ['제1장 시작', '제2장 끝']);
       expect(content.toc[0].offset, 0);
       expect(content.text.substring(content.toc[1].offset), startsWith('제2장 끝'));

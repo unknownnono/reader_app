@@ -67,12 +67,28 @@ final inboxScannerProvider = Provider<InboxScanner>(
   ),
 );
 
-/// 읽은 책은 최근에 읽은 순으로 위에, 아직 안 읽은 책은 제목 순(1권, 2권, … 10권)으로 그 아래에 둔다.
-final booksProvider = StreamProvider<List<Book>>(
-  (ref) => ref.watch(bookRepositoryProvider).watchAll().map((books) {
-    final read = books.where((b) => b.lastReadAt != null);
-    final unread = books.where((b) => b.lastReadAt == null).toList()
-      ..sort((a, b) => naturalCompare(a.title, b.title));
-    return [...read, ...unread];
-  }),
+final _allBooksProvider = StreamProvider<List<Book>>(
+  (ref) => ref.watch(bookRepositoryProvider).watchAll(),
 );
+
+/// 서재에 보여 줄 책. 설정한 정렬 방식을 따른다.
+final booksProvider = Provider<AsyncValue<List<Book>>>((ref) {
+  final sort = ref.watch(readerSettingsProvider.select((s) => s.librarySort));
+  return ref.watch(_allBooksProvider).whenData((books) => sortBooks(books, sort));
+});
+
+List<Book> sortBooks(List<Book> books, LibrarySort sort) {
+  int byTitle(Book a, Book b) => naturalCompare(a.title, b.title);
+  switch (sort) {
+    case LibrarySort.recent:
+      // 읽은 책은 최근에 읽은 순으로 위에, 아직 안 읽은 책은 제목 순(1권, 2권, … 10권)으로 그 아래에 둔다.
+      final read = books.where((b) => b.lastReadAt != null).toList()
+        ..sort((a, b) => b.lastReadAt!.compareTo(a.lastReadAt!));
+      final unread = books.where((b) => b.lastReadAt == null).toList()..sort(byTitle);
+      return [...read, ...unread];
+    case LibrarySort.title:
+      return [...books]..sort(byTitle);
+    case LibrarySort.added:
+      return [...books]..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+  }
+}

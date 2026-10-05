@@ -38,6 +38,11 @@ class BookRepository {
         .write(BooksCompanion(lastReadAt: Value(DateTime.now())));
   }
 
+  Future<void> rename(int id, String title) {
+    return (_db.update(_db.books)..where((b) => b.id.equals(id)))
+        .write(BooksCompanion(title: Value(title)));
+  }
+
   Future<void> delete(int id) {
     return (_db.delete(_db.books)..where((b) => b.id.equals(id))).go();
   }

@@ -34,29 +34,78 @@ TextContent parseEpub(String path) {
   }
 }
 
-TextContent _parse(Archive archive) {
-  String read(String name) {
-    final file = archive.find(name);
-    if (file == null) throw FormatException('epub 안에 $name 이(가) 없습니다.');
-    return utf8.decode(file.content, allowMalformed: true);
+/// 표지 그림의 책 파일(zip) 안 경로를 찾는다. 없으면 null.
+String? findEpubCover(String path) {
+  final input = InputFileStream(path);
+  try {
+    final package = _Package.read(ZipDecoder().decodeStream(input));
+    final items = package.items;
+    // EPUB 3은 properties="cover-image", EPUB 2는 <meta name="cover" content="항목 id">로 표시한다.
+    final coverId = package.opf.descendantElements
+        .where((e) => e.localName == 'meta' && e.getAttribute('name') == 'cover')
+        .map((e) => e.getAttribute('content'))
+        .firstOrNull;
+    bool isImage(XmlElement e) => (e.getAttribute('media-type') ?? '').startsWith('image/');
+    final candidates = [
+      ...items.values.where(
+        (e) => (e.getAttribute('properties') ?? '').split(' ').contains('cover-image'),
+      ),
+      if (items[coverId] != null) items[coverId]!,
+      // 표시가 없으면 책에 들어 있는 첫 그림을 쓴다.
+      ...items.values.where(isImage),
+    ];
+    for (final item in candidates) {
+      final coverPath = package.pathOf(item);
+      if (isImage(item) && package.archive.find(coverPath) != null) return coverPath;
+    }
+    return null;
+  } finally {
+    input.closeSync();
+  }
+}
+
+/// epub의 구성 파일(OPF)과 그 안의 항목 목록
+class _Package {
+  _Package(this.archive, this.opf, this.opfDir, this.items);
+
+  factory _Package.read(Archive archive) {
+    final container = XmlDocument.parse(_readText(archive, 'META-INF/container.xml'));
+    final opfPath = container.descendantElements
+        .firstWhere(
+          (e) => e.localName == 'rootfile',
+          orElse: () => throw const FormatException('epub 구성 파일을 찾을 수 없습니다.'),
+        )
+        .getAttribute('full-path')!;
+    final opf = XmlDocument.parse(_readText(archive, opfPath));
+    return _Package(archive, opf, _posix.dirname(opfPath), {
+      for (final item in opf.descendantElements.where((e) => e.localName == 'item'))
+        if (item.getAttribute('id') != null) item.getAttribute('id')!: item,
+    });
   }
 
-  final container = XmlDocument.parse(read('META-INF/container.xml'));
-  final opfPath = container.descendantElements
-      .firstWhere(
-        (e) => e.localName == 'rootfile',
-        orElse: () => throw const FormatException('epub 구성 파일을 찾을 수 없습니다.'),
-      )
-      .getAttribute('full-path')!;
-  final opfDir = _posix.dirname(opfPath);
-  final opf = XmlDocument.parse(read(opfPath));
+  final Archive archive;
+  final XmlDocument opf;
+  final String opfDir;
 
-  // 목록(manifest)의 id → 압축 파일 안 경로
-  final items = <String, XmlElement>{
-    for (final item in opf.descendantElements.where((e) => e.localName == 'item'))
-      if (item.getAttribute('id') != null) item.getAttribute('id')!: item,
-  };
+  /// 목록(manifest)의 id → 항목
+  final Map<String, XmlElement> items;
+
+  /// 항목의 압축 파일 안 경로
   String pathOf(XmlElement item) => _resolve(opfDir, item.getAttribute('href') ?? '');
+}
+
+String _readText(Archive archive, String name) {
+  final file = archive.find(name);
+  if (file == null) throw FormatException('epub 안에 $name 이(가) 없습니다.');
+  return utf8.decode(file.content, allowMalformed: true);
+}
+
+TextContent _parse(Archive archive) {
+  String read(String name) => _readText(archive, name);
+  final package = _Package.read(archive);
+  final opf = package.opf;
+  final items = package.items;
+  final pathOf = package.pathOf;
 
   // 읽는 순서(spine)대로 본문을 이어 붙이고 각 장의 시작 위치를 기억한다.
   final buffer = StringBuffer();
