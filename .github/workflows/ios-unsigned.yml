@@ -1,0 +1,27 @@
+name: iOS unsigned IPA
+
+# 서명 없는 IPA를 만든다. 내려받아 Windows의 Sideloadly로 iPhone에 설치한다.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter build ios --release --no-codesign
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -qr reader_app.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reader_app-ipa
+          path: reader_app.ipa

@@ -1,0 +1,214 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../data/db/app_database.dart';
+import '../../../domain/reading_position.dart';
+import '../../../formats/txt/txt_decoder.dart';
+import '../../../formats/txt/txt_paginator.dart';
+import '../../../providers.dart';
+
+const _pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
+const _lineHeight = 1.7;
+const _barHeight = 56.0;
+const _minFontSize = 12.0;
+const _maxFontSize = 32.0;
+
+class TextRenderer extends ConsumerStatefulWidget {
+  const TextRenderer({super.key, required this.book});
+
+  final Book book;
+
+  @override
+  ConsumerState<TextRenderer> createState() => _TextRendererState();
+}
+
+class _TextRendererState extends ConsumerState<TextRenderer> {
+  String? _text;
+  Object? _error;
+  int _start = 0;
+  bool _showControls = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final file = await ref.read(bookStorageProvider).fileFor(widget.book.fileName);
+      final text = await decodeTxt(await file.readAsBytes());
+      final position = await ref.read(progressRepositoryProvider).get(widget.book.id);
+      if (!mounted) return;
+      setState(() {
+        _text = text;
+        _start = position.offset.clamp(0, text.isEmpty ? 0 : text.length - 1);
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error);
+    }
+  }
+
+  void _goTo(int offset) {
+    final text = _text!;
+    final start = offset.clamp(0, text.isEmpty ? 0 : text.length - 1);
+    if (start == _start) return;
+    setState(() => _start = start);
+    ref.read(progressRepositoryProvider).save(
+          widget.book.id,
+          ReadingPosition(
+            offset: start,
+            progress: text.isEmpty ? 0 : start / text.length,
+          ),
+        );
+  }
+
+  /// 슬라이더로 이동할 때 줄 중간에서 시작하지 않도록 가까운 줄 시작으로 맞춘다.
+  int _snapToLineStart(int offset) {
+    final newline = _text!.lastIndexOf('\n', offset);
+    if (newline >= 0 && offset - newline < 500) return newline + 1;
+    return offset;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _text;
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.book.title)),
+        body: Center(child: Text('파일을 열지 못했습니다.\n$_error')),
+      );
+    }
+    if (text == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final theme = Theme.of(context);
+    final fontSize = ref.watch(txtFontSizeProvider);
+    final style = theme.textTheme.bodyLarge!.copyWith(
+      fontSize: fontSize,
+      height: _lineHeight,
+      color: theme.colorScheme.onSurface,
+    );
+    final strutStyle = StrutStyle(
+      fontSize: fontSize,
+      height: _lineHeight,
+      forceStrutHeight: true,
+    );
+
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Padding(
+              padding: _pagePadding,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final paginator = TxtPaginator(
+                    text: text,
+                    style: style,
+                    strutStyle: strutStyle,
+                    pageSize: constraints.biggest,
+                  );
+                  final end = paginator.pageEnd(_start);
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (details) {
+                      final x = details.localPosition.dx / constraints.maxWidth;
+                      if (x < 1 / 3) {
+                        _goTo(paginator.pageStartBefore(_start));
+                      } else if (x > 2 / 3) {
+                        if (end < text.length) _goTo(end);
+                      } else {
+                        setState(() => _showControls = !_showControls);
+                      }
+                    },
+                    onHorizontalDragEnd: (details) {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity < 0 && end < text.length) _goTo(end);
+                      if (velocity > 0) _goTo(paginator.pageStartBefore(_start));
+                    },
+                    child: SizedBox.expand(
+                      child: RichText(
+                        text: TextSpan(
+                          text: text.substring(_start, end),
+                          style: style,
+                        ),
+                        strutStyle: strutStyle,
+                        textScaler: TextScaler.noScaling,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (_showControls) ...[
+              // Slider는 주어진 높이를 다 차지하므로 막대 높이를 고정한다.
+              Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(height: _barHeight, child: _topBar(theme, fontSize)),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(height: _barHeight, child: _bottomBar(theme, text)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _topBar(ThemeData theme, double fontSize) {
+    final notifier = ref.read(txtFontSizeProvider.notifier);
+    return Material(
+      color: theme.colorScheme.surfaceContainer,
+      child: Row(
+        children: [
+          const BackButton(),
+          Expanded(
+            child: Text(
+              widget.book.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          IconButton(
+            tooltip: '글자 작게',
+            onPressed: fontSize > _minFontSize ? () => notifier.set(fontSize - 1) : null,
+            icon: const Icon(Icons.text_decrease),
+          ),
+          Text('${fontSize.round()}'),
+          IconButton(
+            tooltip: '글자 크게',
+            onPressed: fontSize < _maxFontSize ? () => notifier.set(fontSize + 1) : null,
+            icon: const Icon(Icons.text_increase),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomBar(ThemeData theme, String text) {
+    final progress = text.isEmpty ? 0.0 : _start / text.length;
+    return Material(
+      color: theme.colorScheme.surfaceContainer,
+      child: Row(
+        children: [
+          Expanded(
+            child: Slider(
+              value: progress,
+              onChanged: (value) =>
+                  _goTo(_snapToLineStart((value * text.length).floor())),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Text('${(progress * 100).toStringAsFixed(1)}%'),
+          ),
+        ],
+      ),
+    );
+  }
+}
