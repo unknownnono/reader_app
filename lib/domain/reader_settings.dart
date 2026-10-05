@@ -29,6 +29,16 @@ enum ReaderTheme {
       };
 }
 
+/// 만화 보기 방식
+enum ComicMode {
+  paged('한 쪽씩 넘기기'),
+  vertical('세로 스크롤');
+
+  const ComicMode(this.label);
+
+  final String label;
+}
+
 /// 서재 정렬 방식
 enum LibrarySort {
   recent('최근 읽은 순'),
@@ -48,6 +58,8 @@ class ReaderSettings {
     this.margin = 20,
     this.theme = ReaderTheme.system,
     this.comicRightToLeft = false,
+    this.comicMode = ComicMode.paged,
+    this.comicDoublePage = true,
     this.libraryGrid = true,
     this.librarySort = LibrarySort.recent,
   });
@@ -68,6 +80,10 @@ class ReaderSettings {
 
   /// 만화 넘김 방향. 일본 만화는 오른쪽에서 왼쪽으로 읽는다.
   final bool comicRightToLeft;
+  final ComicMode comicMode;
+
+  /// 화면을 가로로 돌렸을 때 두 쪽을 나란히 보여 줄지. 한 쪽씩 넘기기에서만 쓴다.
+  final bool comicDoublePage;
 
   /// 서재를 표지 격자로 볼지(true) 목록으로 볼지(false)
   final bool libraryGrid;
@@ -79,6 +95,8 @@ class ReaderSettings {
     double? margin,
     ReaderTheme? theme,
     bool? comicRightToLeft,
+    ComicMode? comicMode,
+    bool? comicDoublePage,
     bool? libraryGrid,
     LibrarySort? librarySort,
   }) {
@@ -88,6 +106,8 @@ class ReaderSettings {
       margin: (margin ?? this.margin).clamp(minMargin, maxMargin),
       theme: theme ?? this.theme,
       comicRightToLeft: comicRightToLeft ?? this.comicRightToLeft,
+      comicMode: comicMode ?? this.comicMode,
+      comicDoublePage: comicDoublePage ?? this.comicDoublePage,
       libraryGrid: libraryGrid ?? this.libraryGrid,
       librarySort: librarySort ?? this.librarySort,
     );

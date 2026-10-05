@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:reader_app/app/app.dart';
 import 'package:reader_app/providers.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test/support/sample_epub.dart';
@@ -64,6 +65,13 @@ void main() {
       await File(p.join(comicDir.path, '$number.png'))
           .writeAsBytes(await tester.runAsync(() => pngPage(number)) as List<int>);
     }
+    // 다음 권으로 이어 보기를 확인할 두 번째 만화
+    final nextTitle = '$comicTitle b';
+    final nextDir = Directory(p.join(docs.path, nextTitle));
+    await nextDir.create(recursive: true);
+    await File(p.join(nextDir.path, '1.png'))
+        .writeAsBytes(await tester.runAsync(() => pngPage(4)) as List<int>);
+
     // "가나다라"의 CP949 바이트. UTF-8로는 읽히지 않는다.
     await File(p.join(docs.path, '$novelTitle.txt'))
         .writeAsBytes([0xB0, 0xA1, 0xB3, 0xAA, 0xB4, 0xD9, 0xB6, 0xF3]);
@@ -78,7 +86,7 @@ void main() {
         child: const ReaderApp(),
       ),
     );
-    await pumpUntil(tester, find.text('앱 폴더에서 3권을 추가했습니다.'));
+    await pumpUntil(tester, find.text('앱 폴더에서 4권을 추가했습니다.'));
     // 가져온 것은 앱 폴더에서 books로 옮겨진다.
     expect(await comicDir.exists(), isFalse);
 
@@ -137,5 +145,34 @@ void main() {
     expect(find.textContaining('파일을 열지 못했습니다'), findsNothing);
     await tester.tapAt(tester.getCenter(find.byType(PhotoViewGallery)));
     await pumpUntil(tester, find.text('1 / 3'));
+
+    // 마지막 장을 넘기면 다음 권으로 이어서 열 수 있다.
+    final screen = tester.getRect(find.byType(PhotoViewGallery));
+    for (var i = 0; i < 8 && find.text('끝').evaluate().isEmpty; i++) {
+      await tester.tapAt(Offset(screen.right - 30, screen.center.dy));
+      // 넘김 애니메이션이 끝나려면 프레임이 여러 번 그려져야 한다.
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+    expect(find.text('끝'), findsOneWidget, reason: '마지막 장 다음 화면까지 넘어가야 한다');
+    await pumpUntil(tester, find.text('다음 권 열기'));
+    expect(find.text(nextTitle), findsOneWidget);
+    await tester.tap(find.text('다음 권 열기'));
+    await pumpUntil(tester, find.byType(PhotoViewGallery));
+    await tester.tapAt(tester.getCenter(find.byType(PhotoViewGallery)));
+    await pumpUntil(tester, find.text('1 / 1'));
+
+    // 세로 스크롤로 바꿔도 그림이 나온다. 확인 뒤 원래대로 돌려놓는다.
+    await tester.tap(find.byTooltip('만화 설정'));
+    await pumpUntil(tester, find.text('세로 스크롤'));
+    await tester.tap(find.text('세로 스크롤'));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(prefs.getString('comic.mode'), 'vertical');
+    expect(find.byType(ScrollablePositionedList), findsOneWidget);
+    await pumpUntil(tester, illustration);
+    await tester.tap(find.text('한 쪽씩 넘기기'));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(prefs.getString('comic.mode'), 'paged');
   });
 }

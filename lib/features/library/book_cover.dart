@@ -46,31 +46,38 @@ class _Placeholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final icon = Icon(
+      switch (book.format) {
+        BookFormat.txt => Icons.description_outlined,
+        BookFormat.epub => Icons.menu_book_outlined,
+        BookFormat.comic => Icons.photo_library_outlined,
+      },
+      color: scheme.onSurfaceVariant,
+    );
     return ColoredBox(
       color: scheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              switch (book.format) {
-                BookFormat.txt => Icons.description_outlined,
-                BookFormat.epub => Icons.menu_book_outlined,
-                BookFormat.comic => Icons.photo_library_outlined,
-              },
-              color: scheme.onSurfaceVariant,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 목록 보기의 작은 표지에는 제목이 들어갈 자리가 없어 아이콘만 둔다.
+          if (constraints.maxHeight < 120) return Center(child: icon);
+          return Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                icon,
+                const SizedBox(height: 8),
+                Text(
+                  book.title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              book.title,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

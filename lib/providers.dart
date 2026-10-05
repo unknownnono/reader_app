@@ -7,6 +7,7 @@ import 'data/book_repository.dart';
 import 'data/db/app_database.dart';
 import 'data/progress_repository.dart';
 import 'data/settings_repository.dart';
+import 'domain/book_format.dart';
 import 'domain/reader_settings.dart';
 import 'features/library/import/book_importer.dart';
 import 'features/library/import/inbox_scanner.dart';
@@ -75,6 +76,19 @@ final _allBooksProvider = StreamProvider<List<Book>>(
 final booksProvider = Provider<AsyncValue<List<Book>>>((ref) {
   final sort = ref.watch(readerSettingsProvider.select((s) => s.librarySort));
   return ref.watch(_allBooksProvider).whenData((books) => sortBooks(books, sort));
+});
+
+/// [current] 다음에 읽을 만화. 서재의 만화를 제목 순으로 놓았을 때 바로 다음 책이다.
+Book? nextComic(List<Book> books, Book current) {
+  final comics = books.where((b) => b.format == BookFormat.comic).toList()
+    ..sort((a, b) => naturalCompare(a.title, b.title));
+  final index = comics.indexWhere((b) => b.id == current.id);
+  return index == -1 || index + 1 >= comics.length ? null : comics[index + 1];
+}
+
+final nextComicProvider = Provider.family<Book?, Book>((ref, current) {
+  final books = ref.watch(_allBooksProvider).value ?? const <Book>[];
+  return nextComic(books, current);
 });
 
 List<Book> sortBooks(List<Book> books, LibrarySort sort) {
