@@ -1,0 +1,26 @@
+name: iOS simulator check
+
+# iPhone 시뮬레이터에서 앱을 실제로 띄워 통합 테스트를 돌린다.
+# 기기에 설치하기 전에 iOS에서의 동작을 확인하는 용도다.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: Boot an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print([x['udid'] for k in sorted(d) if 'iOS' in k for x in d[k] if x['name'].startswith('iPhone')][-1])")
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+      - run: flutter test integration_test -d "$UDID"
