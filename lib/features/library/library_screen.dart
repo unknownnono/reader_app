@@ -83,30 +83,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// 낱장 이미지를 묶을 만화 제목을 묻는다. 취소하면 null.
   Future<String?> _askComicTitle(PickedFiles picked) async {
     if (!mounted) return null;
-    final controller = TextEditingController(text: picked.suggestedTitle);
     final title = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('이미지 ${picked.images.length}장을 만화 한 권으로'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '제목'),
-          onSubmitted: (value) => Navigator.pop(context, value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('추가'),
-          ),
-        ],
+      builder: (context) => _ComicTitleDialog(
+        imageCount: picked.images.length,
+        initialTitle: picked.suggestedTitle,
       ),
     );
-    controller.dispose();
     final trimmed = title?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
@@ -216,6 +199,50 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         tooltip: '가져오기',
         child: const Icon(Icons.add),
       ),
+    );
+  }
+}
+
+/// 닫히는 애니메이션이 끝날 때까지 입력 컨트롤러가 살아 있도록 대화상자가 직접 소유한다.
+class _ComicTitleDialog extends StatefulWidget {
+  const _ComicTitleDialog({required this.imageCount, required this.initialTitle});
+
+  final int imageCount;
+  final String initialTitle;
+
+  @override
+  State<_ComicTitleDialog> createState() => _ComicTitleDialogState();
+}
+
+class _ComicTitleDialogState extends State<_ComicTitleDialog> {
+  late final _controller = TextEditingController(text: widget.initialTitle);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('이미지 ${widget.imageCount}장을 만화 한 권으로'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: '제목'),
+        onSubmitted: (value) => Navigator.pop(context, value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('추가'),
+        ),
+      ],
     );
   }
 }
