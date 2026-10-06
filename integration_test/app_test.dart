@@ -94,13 +94,17 @@ void main() {
     expect(await comicDir.exists(), isFalse);
 
     // 묶음은 한 칸으로 보이고, 누르면 그 안의 책이 나온다.
+    // 읽던 책이 남아 있는 기기에서는 최근 탭으로 시작하므로 파일 탭으로 옮긴다.
+    await tester.tap(find.text('파일').last);
+    // 알림이 먼저 뜨고 목록은 조금 뒤에 바뀌므로 묶음이 나타날 때까지 기다린다.
+    await pumpUntil(tester, find.text(seriesName));
     await tester.scrollUntilVisible(bookTitle(seriesName), 300);
     expect(find.text('2권'), findsOneWidget);
     await tester.tap(bookTitle(seriesName));
     await pumpUntil(tester, find.text('$seriesName 2'));
     expect(find.text('$seriesName 1'), findsWidgets);
     await tester.pageBack();
-    await pumpUntil(tester, find.text('서재'));
+    await pumpUntil(tester, find.text('파일'));
 
     // CP949 txt가 한글로 열린다. 서재에 책이 많으면 화면 밖에 있을 수 있어 스크롤해서 찾는다.
     await tester.scrollUntilVisible(bookTitle(novelTitle), 300);
@@ -146,7 +150,7 @@ void main() {
     await pumpUntil(tester, find.byType(BackButton));
 
     await tester.tap(find.byType(BackButton));
-    await pumpUntil(tester, find.text('서재'));
+    await pumpUntil(tester, find.text('파일'));
 
     // epub 본문이 열리고, 목차로 2장으로 이동할 수 있다.
     await tester.scrollUntilVisible(bookTitle(epubTitle), 300);
@@ -170,7 +174,7 @@ void main() {
     await tester.tapAt(tester.getCenter(find.byType(Scaffold).first));
     await pumpUntil(tester, find.byType(BackButton));
     await tester.tap(find.byType(BackButton));
-    await pumpUntil(tester, find.text('서재'));
+    await pumpUntil(tester, find.text('파일'));
 
     // 만화가 열리고 쪽수가 맞다.
     await tester.scrollUntilVisible(bookTitle(comicTitle), 300);
@@ -208,5 +212,19 @@ void main() {
     await tester.tap(find.text('한 쪽씩 넘기기'));
     await tester.pump(const Duration(milliseconds: 600));
     expect(prefs.getString('comic.mode'), 'paged');
+
+    // 서재로 돌아와 최근 탭을 열면 방금 읽던 책을 이어 읽을 수 있다.
+    await tester.tapAt(const Offset(30, 200));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byType(BackButton));
+    await pumpUntil(tester, find.text('최근'));
+    await tester.tap(find.text('최근'));
+    await pumpUntil(tester, find.text('이어 읽기'));
+    expect(find.text(nextTitle), findsWidgets);
+
+    // 설정 탭도 열린다.
+    await tester.tap(find.text('설정'));
+    await pumpUntil(tester, find.text('시리즈로 묶기'));
   });
 }
+

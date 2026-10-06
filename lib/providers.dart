@@ -109,6 +109,13 @@ final booksProvider = Provider<AsyncValue<List<Book>>>((ref) {
   return ref.watch(_allBooksProvider).whenData((books) => sortBooks(books, sort));
 });
 
+/// 읽은 적이 있는 책. 가장 최근에 읽은 책이 먼저 온다.
+final recentBooksProvider = Provider<List<Book>>((ref) {
+  final books = ref.watch(_allBooksProvider).value ?? const <Book>[];
+  return books.where((b) => b.lastReadAt != null).toList()
+    ..sort((a, b) => b.lastReadAt!.compareTo(a.lastReadAt!));
+});
+
 /// [current] 다음에 읽을 만화. 서재의 만화를 제목 순으로 놓았을 때 바로 다음 책이다.
 Book? nextComic(List<Book> books, Book current) {
   final comics = books.where((b) => b.format == BookFormat.comic).toList()

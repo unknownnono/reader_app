@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
@@ -15,6 +16,7 @@ import '../../../providers.dart';
 import '../../settings/comic_settings_sheet.dart';
 import '../bookmark_list.dart';
 import '../comic_layout.dart';
+import '../reader_bar.dart';
 import '../reader_screen.dart';
 
 const _barHeight = 56.0;
@@ -291,7 +293,7 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
       onPageChanged: _onUnitChanged,
       backgroundDecoration: const BoxDecoration(color: Colors.black),
       loadingBuilder: (context, event) =>
-          const Center(child: CircularProgressIndicator()),
+          const Center(child: CupertinoActivityIndicator()),
       builder: (context, unit) {
         if (unit >= _layout.unitCount) {
           return PhotoViewGalleryPageOptions.customChild(
@@ -341,7 +343,7 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
                 ? child
                 : AspectRatio(
                     aspectRatio: 2 / 3,
-                    child: const Center(child: CircularProgressIndicator()),
+                    child: const Center(child: CupertinoActivityIndicator()),
                   ),
             errorBuilder: (context, error, _) => const SizedBox(
               height: 200,
@@ -392,8 +394,8 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
           in ref.watch(bookmarksProvider(widget.book.id)).value ?? const <Bookmark>[])
         if (shown.contains(bookmark.position)) bookmark,
     ];
-    return Material(
-      color: theme.colorScheme.surfaceContainer,
+    return ReaderBar(
+      top: true,
       child: Row(
         children: [
           const BackButton(),
@@ -409,17 +411,17 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
             IconButton(
               tooltip: onThisPage.isEmpty ? '북마크 추가' : '북마크 해제',
               onPressed: () => _toggleBookmark(onThisPage),
-              icon: Icon(onThisPage.isEmpty ? Icons.bookmark_border : Icons.bookmark),
+              icon: Icon(onThisPage.isEmpty ? CupertinoIcons.bookmark : CupertinoIcons.bookmark_fill),
             ),
           IconButton(
             tooltip: '북마크 목록',
             onPressed: _showBookmarks,
-            icon: const Icon(Icons.bookmarks_outlined),
+            icon: const Icon(CupertinoIcons.square_list),
           ),
           IconButton(
             tooltip: '만화 설정',
             onPressed: () => showComicSettingsSheet(context),
-            icon: const Icon(Icons.tune),
+            icon: const Icon(CupertinoIcons.slider_horizontal_3),
           ),
         ],
       ),
@@ -434,15 +436,15 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
         : shown.length == 2
             ? '${shown.first + 1}-${shown.last + 1} / ${archive.pageCount}'
             : '${_page + 1} / ${archive.pageCount}';
-    return Material(
-      color: theme.colorScheme.surfaceContainer,
+    return ReaderBar(
+      top: false,
       child: Row(
         children: [
           Expanded(
             // 넘기는 방향과 막대 방향을 맞춘다.
             child: Directionality(
               textDirection: rightToLeft ? TextDirection.rtl : TextDirection.ltr,
-              child: Slider(
+              child: Slider.adaptive(
                 value: _atEnd ? last.toDouble() : _page.toDouble(),
                 max: last == 0 ? 1 : last.toDouble(),
                 divisions: last == 0 ? null : last,

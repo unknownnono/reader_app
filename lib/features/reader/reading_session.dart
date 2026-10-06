@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../../domain/reader_settings.dart';
 import '../../providers.dart';
 
 /// 책을 읽는 동안에만 적용되는 화면 상태.
@@ -56,38 +55,5 @@ class _ReadingSessionState extends ConsumerState<ReadingSession> {
       (_, brightness) => _applyBrightness(brightness),
     );
     return widget.child;
-  }
-}
-
-/// 설정 창에 넣는 밝기 조절 줄. 왼쪽 버튼으로 기기 밝기를 그대로 쓰도록 되돌린다.
-class BrightnessControl extends ConsumerWidget {
-  const BrightnessControl({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final brightness = ref.watch(readerSettingsProvider.select((s) => s.brightness));
-    final notifier = ref.read(readerSettingsProvider.notifier);
-    final usesSystem = brightness < 0;
-    return Row(
-      children: [
-        const Text('밝기'),
-        Expanded(
-          child: Slider(
-            // 기기 밝기를 쓰는 동안에는 손잡이를 가운데에 둔다.
-            value: usesSystem ? 0.5 : brightness,
-            min: ReaderSettings.minBrightness,
-            onChanged: (value) => notifier.update((s) => s.copyWith(brightness: value)),
-          ),
-        ),
-        TextButton(
-          onPressed: usesSystem
-              ? null
-              : () => notifier.update(
-                    (s) => s.copyWith(brightness: ReaderSettings.systemBrightness),
-                  ),
-          child: Text(usesSystem ? '기기 밝기' : '되돌리기'),
-        ),
-      ],
-    );
   }
 }

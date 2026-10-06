@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +10,7 @@ import '../../../formats/zip_entry.dart';
 import '../../../providers.dart';
 import '../../settings/reader_settings_sheet.dart';
 import '../bookmark_list.dart';
+import '../reader_bar.dart';
 import '../text_search.dart';
 
 const _verticalPadding = 16.0;
@@ -348,8 +350,8 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
           in ref.watch(bookmarksProvider(widget.book.id)).value ?? const <Bookmark>[])
         if (bookmark.position >= _start && bookmark.position < _pageEnd) bookmark,
     ];
-    return Material(
-      color: theme.colorScheme.surfaceContainer,
+    return ReaderBar(
+      top: true,
       child: Row(
         children: [
           const BackButton(),
@@ -364,22 +366,22 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
           IconButton(
             tooltip: onThisPage.isEmpty ? '북마크 추가' : '북마크 해제',
             onPressed: () => _toggleBookmark(onThisPage),
-            icon: Icon(onThisPage.isEmpty ? Icons.bookmark_border : Icons.bookmark),
+            icon: Icon(onThisPage.isEmpty ? CupertinoIcons.bookmark : CupertinoIcons.bookmark_fill),
           ),
           IconButton(
             tooltip: '목차·북마크',
             onPressed: _showContents,
-            icon: const Icon(Icons.list),
+            icon: const Icon(CupertinoIcons.list_bullet),
           ),
           IconButton(
             tooltip: '본문 검색',
             onPressed: _openSearch,
-            icon: const Icon(Icons.search),
+            icon: const Icon(CupertinoIcons.search),
           ),
           IconButton(
             tooltip: '읽기 설정',
             onPressed: () => showReaderSettingsSheet(context),
-            icon: const Icon(Icons.text_format),
+            icon: const Icon(CupertinoIcons.textformat_size),
           ),
         ],
       ),
@@ -388,12 +390,12 @@ class _TextRendererState extends ConsumerState<TextRenderer> {
 
   Widget _bottomBar(ThemeData theme, String text) {
     final progress = text.isEmpty ? 0.0 : _start / text.length;
-    return Material(
-      color: theme.colorScheme.surfaceContainer,
+    return ReaderBar(
+      top: false,
       child: Row(
         children: [
           Expanded(
-            child: Slider(
+            child: Slider.adaptive(
               value: progress,
               onChanged: (value) =>
                   _goTo(_snapToLineStart((value * text.length).floor())),

@@ -1,17 +1,18 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app.dart';
+import '../../app/theme.dart';
 import '../../core/diag/diag_log.dart';
 import '../../core/utils/natural_compare.dart';
 import '../../data/db/app_database.dart';
 import '../../domain/reader_settings.dart';
 import '../../providers.dart';
 import '../reader/reader_screen.dart';
-import '../settings/diag_screen.dart';
 import '../transfer/transfer_screen.dart';
 import 'book_cover.dart';
 import 'import/book_importer.dart';
@@ -127,12 +128,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         barrierDismissible: false,
         builder: (_) => const PopScope(
           canPop: false,
-          child: AlertDialog(
-            content: Row(
+          child: CupertinoAlertDialog(
+            content: Column(
               children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 24),
-                Expanded(child: Text('폴더를 가져오는 중입니다…')),
+                CupertinoActivityIndicator(radius: 12),
+                SizedBox(height: 12),
+                Text('폴더를 가져오는 중입니다…'),
               ],
             ),
           ),
@@ -160,65 +161,37 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
   }
 
+  /// 책을 넣는 방법을 고르는 아이폰식 선택 창
   void _showImportMenu() {
-    showModalBottomSheet<void>(
+    CupertinoActionSheetAction action(String label, VoidCallback onChosen) {
+      return CupertinoActionSheetAction(
+        onPressed: () {
+          Navigator.pop(context);
+          onChosen();
+        },
+        child: Text(label),
+      );
+    }
+
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.insert_drive_file_outlined),
-              title: const Text('파일 가져오기'),
-              subtitle: const Text('txt, epub, zip, cbz, 또는 이미지 여러 장'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _importFiles();
-              },
+      builder: (_) => CupertinoActionSheet(
+        title: const Text('책 넣기'),
+        message: const Text('txt, epub, zip, cbz 파일이나 만화 그림 여러 장을 넣을 수 있습니다.'),
+        actions: [
+          action('파일 고르기', _importFiles),
+          if (Platform.isAndroid) action('그림 폴더 고르기', _importFolder),
+          if (_usesAppFolder) action('앱 폴더에 넣은 것 가져오기', () => _scanAppFolder(silent: false)),
+          action(
+            'Wi-Fi로 PC에서 받기',
+            () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TransferScreen()),
             ),
-            if (Platform.isAndroid)
-              ListTile(
-                leading: const Icon(Icons.folder_outlined),
-                title: const Text('이미지 폴더 가져오기'),
-                subtitle: const Text('폴더 하나를 만화 한 권으로 추가'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _importFolder();
-                },
-              ),
-            if (_usesAppFolder)
-              ListTile(
-                leading: const Icon(Icons.drive_folder_upload_outlined),
-                title: const Text('앱 폴더에서 가져오기'),
-                subtitle: const Text('파일 앱 → 나의 iPhone → $appName에 넣은 폴더와 파일'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _scanAppFolder(silent: false);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.wifi),
-              title: const Text('Wi-Fi로 받기'),
-              subtitle: const Text('같은 Wi-Fi의 PC 브라우저에서 파일과 폴더 보내기'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const TransferScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('진단 기록'),
-              subtitle: const Text('가져오기가 안 될 때 어디서 멈추는지 확인'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DiagScreen()),
-                );
-              },
-            ),
-          ],
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
         ),
       ),
     );
@@ -257,19 +230,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final targets = books.where((b) => _selected.contains(b.id)).toList();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: const Text('책 삭제'),
         content: Text(
           targets.length == 1
-              ? '"${targets.single.title}"을(를) 서재에서 삭제할까요?'
-              : '${targets.length}권을 서재에서 삭제할까요?',
+              ? '"${targets.single.title}"을(를) 삭제할까요?'
+              : '${targets.length}권을 삭제할까요?',
         ),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('취소'),
           ),
-          TextButton(
+          CupertinoDialogAction(
+            isDestructiveAction: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('삭제'),
           ),
@@ -287,10 +261,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   PreferredSizeWidget _appBar(List<Book> books, ReaderSettings settings) {
     if (_selected.isNotEmpty) {
       return AppBar(
-        leading: IconButton(
-          tooltip: '선택 해제',
+        leadingWidth: 72,
+        leading: TextButton(
           onPressed: () => setState(_selected.clear),
-          icon: const Icon(Icons.close),
+          child: const Text('취소'),
         ),
         title: Text('${_selected.length}권 선택'),
         actions: [
@@ -298,47 +272,55 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             IconButton(
               tooltip: '이름 변경',
               onPressed: () => _renameSelected(books),
-              icon: const Icon(Icons.edit_outlined),
+              icon: const Icon(CupertinoIcons.pencil),
             ),
           IconButton(
             tooltip: '삭제',
             onPressed: () => _deleteSelected(books),
-            icon: const Icon(Icons.delete_outline),
+            icon: Icon(CupertinoIcons.trash, color: Theme.of(context).colorScheme.error),
           ),
         ],
       );
     }
     if (_searching) {
       return AppBar(
-        leading: IconButton(
-          tooltip: '검색 닫기',
-          onPressed: () => setState(() {
-            _searching = false;
-            _query = '';
-          }),
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: TextField(
+        automaticallyImplyLeading: false,
+        titleSpacing: 16,
+        title: CupertinoSearchTextField(
           autofocus: true,
-          decoration: const InputDecoration(hintText: '제목 검색', border: InputBorder.none),
+          placeholder: '제목 검색',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
           onChanged: (value) => setState(() => _query = value),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => setState(() {
+              _searching = false;
+              _query = '';
+            }),
+            child: const Text('취소'),
+          ),
+        ],
       );
     }
     final notifier = ref.read(readerSettingsProvider.notifier);
+    final series = widget.series;
     return AppBar(
-      title: Text(widget.series?.name ?? '서재'),
+      // 탭 첫 화면은 큰 제목을 왼쪽에, 묶음 안은 보통 제목을 가운데에 둔다.
+      centerTitle: series != null,
+      titleSpacing: series == null ? 20 : null,
+      title: series == null ? const LargeTitle('파일') : Text(series.name),
       actions: [
         IconButton(
           tooltip: '제목 검색',
           onPressed: () => setState(() => _searching = true),
-          icon: const Icon(Icons.search),
+          icon: const Icon(CupertinoIcons.search),
         ),
         // 묶음 안은 항상 권 순서라 정렬을 고를 일이 없다.
         if (widget.series == null)
           PopupMenuButton<Object>(
             tooltip: '정렬',
-            icon: const Icon(Icons.sort),
+            icon: const Icon(CupertinoIcons.arrow_up_arrow_down),
             onSelected: (value) => notifier.update(
               (s) => value is LibrarySort
                   ? s.copyWith(librarySort: value)
@@ -363,8 +345,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           tooltip: settings.libraryGrid ? '목록으로 보기' : '표지로 보기',
           onPressed: () =>
               notifier.update((s) => s.copyWith(libraryGrid: !s.libraryGrid)),
-          icon: Icon(settings.libraryGrid ? Icons.view_list : Icons.grid_view),
+          icon: Icon(
+            settings.libraryGrid ? CupertinoIcons.list_bullet : CupertinoIcons.square_grid_2x2,
+          ),
         ),
+        // 책 넣기는 서재 첫 화면에서만 한다.
+        if (widget.series == null)
+          IconButton(
+            tooltip: '가져오기',
+            onPressed: _showImportMenu,
+            icon: const Icon(CupertinoIcons.plus),
+          ),
       ],
     );
   }
@@ -380,8 +371,30 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _body(List<Book> allBooks, ReaderSettings settings) {
     final books = _scope(allBooks);
     if (books.isEmpty) {
+      if (widget.series != null) {
+        return const Center(child: Text('이 묶음에 남은 책이 없습니다.'));
+      }
+      final scheme = Theme.of(context).colorScheme;
       return Center(
-        child: Text(widget.series == null ? '아래 + 버튼으로 책을 추가하세요.' : '이 묶음에 남은 책이 없습니다.'),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(CupertinoIcons.folder, size: 48, color: scheme.onSurfaceVariant),
+              const SizedBox(height: 16),
+              const Text('아직 넣은 책이 없습니다.'),
+              const SizedBox(height: 4),
+              Text(
+                'txt, epub, 만화 zip·cbz, 그림 폴더를 넣을 수 있습니다.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(onPressed: _showImportMenu, child: const Text('책 넣기')),
+            ],
+          ),
+        ),
       );
     }
     final query = _query.trim().toLowerCase();
@@ -432,21 +445,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       );
     }
 
-    // + 버튼이 마지막 줄을 가리지 않도록 아래를 비워 둔다.
-    const bottomSpace = 88.0;
     if (!settings.libraryGrid) {
-      return ListView.builder(
-        padding: const EdgeInsets.only(bottom: bottomSpace),
+      return ListView.separated(
+        padding: const EdgeInsets.only(bottom: 24),
         itemCount: shown.length,
+        separatorBuilder: (context, index) => const Divider(indent: 76),
         itemBuilder: (context, index) => item(shown[index]),
       );
     }
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, bottomSpace),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 130,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
         // 표지(2:3) 아래에 제목 두 줄이 들어갈 높이
         childAspectRatio: 0.54,
       ),
@@ -463,18 +475,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     return Scaffold(
       appBar: _appBar(list, settings),
       body: books.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('서재를 불러오지 못했습니다.\n$error')),
+        loading: () => const Center(child: CupertinoActivityIndicator()),
+        error: (error, _) => Center(child: Text('책 목록을 불러오지 못했습니다.\n$error')),
         data: (list) => _body(list, settings),
       ),
-      // 가져오기는 서재 첫 화면에서만 한다.
-      floatingActionButton: _selected.isNotEmpty || widget.series != null
-          ? null
-          : FloatingActionButton(
-              onPressed: _showImportMenu,
-              tooltip: '가져오기',
-              child: const Icon(Icons.add),
-            ),
     );
   }
 }
@@ -507,20 +511,26 @@ class _TextInputDialogState extends State<_TextInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return CupertinoAlertDialog(
       title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: '제목'),
-        onSubmitted: (value) => Navigator.pop(context, value),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: CupertinoTextField(
+          controller: _controller,
+          autofocus: true,
+          placeholder: '제목',
+          clearButtonMode: OverlayVisibilityMode.editing,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
       ),
       actions: [
-        TextButton(
+        CupertinoDialogAction(
           onPressed: () => Navigator.pop(context),
           child: const Text('취소'),
         ),
-        TextButton(
+        CupertinoDialogAction(
+          isDefaultAction: true,
           onPressed: () => Navigator.pop(context, _controller.text),
           child: Text(widget.confirmLabel),
         ),
