@@ -7,6 +7,8 @@ import '../../domain/book_format.dart';
 import '../../formats/epub/epub_parser.dart';
 import '../../formats/text_content.dart';
 import '../../formats/txt/txt_decoder.dart';
+import '../../formats/txt/txt_toc.dart';
+import 'reading_session.dart';
 import 'renderers/comic_renderer.dart';
 import 'renderers/text_renderer.dart';
 
@@ -18,14 +20,17 @@ class ReaderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (book.format) {
-      BookFormat.txt => TextRenderer(book: book, loader: _loadTxt),
-      BookFormat.epub => TextRenderer(book: book, loader: loadEpub),
-      BookFormat.comic => ComicRenderer(book: book),
-    };
+    return ReadingSession(
+      child: switch (book.format) {
+        BookFormat.txt => TextRenderer(book: book, loader: _loadTxt),
+        BookFormat.epub => TextRenderer(book: book, loader: loadEpub),
+        BookFormat.comic => ComicRenderer(book: book),
+      },
+    );
   }
 }
 
 Future<TextContent> _loadTxt(String path) async {
-  return TextContent(await decodeTxt(await File(path).readAsBytes()));
+  final text = await decodeTxt(await File(path).readAsBytes());
+  return TextContent(text, toc: detectTxtToc(text));
 }

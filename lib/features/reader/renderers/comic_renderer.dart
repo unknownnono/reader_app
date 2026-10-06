@@ -15,6 +15,7 @@ import '../../../providers.dart';
 import '../../settings/comic_settings_sheet.dart';
 import '../bookmark_list.dart';
 import '../comic_layout.dart';
+import '../reader_screen.dart';
 
 const _barHeight = 56.0;
 const _pageTurn = Duration(milliseconds: 200);
@@ -215,7 +216,7 @@ class _ComicRendererState extends ConsumerState<ComicRenderer> {
   void _openNext(Book next) {
     ref.read(bookRepositoryProvider).markOpened(next.id);
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => ComicRenderer(book: next)),
+      MaterialPageRoute(builder: (_) => ReaderScreen(book: next)),
     );
   }
 

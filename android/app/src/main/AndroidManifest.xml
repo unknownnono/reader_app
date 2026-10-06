@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Wi-Fi로 받기: PC 브라우저의 접속을 받는다 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- 이미지 폴더 가져오기: 공용 저장소의 이미지를 읽는다 (13 이상 / 12 이하) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>

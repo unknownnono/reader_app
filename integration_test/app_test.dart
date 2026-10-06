@@ -2,16 +2,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_view/photo_view_gallery.dart';
-import 'package:reader_app/app/app.dart';
-import 'package:reader_app/providers.dart';
+import 'package:reader_app/app/bootstrap.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test/support/sample_epub.dart';
 
@@ -79,16 +76,31 @@ void main() {
     final epubTitle = '시험전자책 $tag';
     await File(p.join(docs.path, '$epubTitle.epub')).writeAsBytes(buildSampleEpub());
 
-    final prefs = await SharedPreferences.getInstance();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-        child: const ReaderApp(),
-      ),
-    );
-    await pumpUntil(tester, find.text('앱 폴더에서 4권을 추가했습니다.'));
+    // 권 번호만 다른 두 권. 서재에서 한 칸으로 묶여야 한다.
+    final seriesName = '묶음시험 $tag';
+    for (final volume in [1, 2]) {
+      final dir = Directory(p.join(docs.path, '$seriesName $volume'));
+      await dir.create(recursive: true);
+      await File(p.join(dir.path, '1.png'))
+          .writeAsBytes(await tester.runAsync(() => pngPage(volume)) as List<int>);
+    }
+
+    // 실제 앱과 같은 준비 과정을 거친다(설정 저장소, 자료 폴더 정하기).
+    final bootstrap = await AppBootstrap.load();
+    final prefs = bootstrap.preferences;
+    await tester.pumpWidget(bootstrap.buildApp());
+    await pumpUntil(tester, find.text('앱 폴더에서 6권을 추가했습니다.'));
     // 가져온 것은 앱 폴더에서 books로 옮겨진다.
     expect(await comicDir.exists(), isFalse);
+
+    // 묶음은 한 칸으로 보이고, 누르면 그 안의 책이 나온다.
+    await tester.scrollUntilVisible(bookTitle(seriesName), 300);
+    expect(find.text('2권'), findsOneWidget);
+    await tester.tap(bookTitle(seriesName));
+    await pumpUntil(tester, find.text('$seriesName 2'));
+    expect(find.text('$seriesName 1'), findsWidgets);
+    await tester.pageBack();
+    await pumpUntil(tester, find.text('서재'));
 
     // CP949 txt가 한글로 열린다. 서재에 책이 많으면 화면 밖에 있을 수 있어 스크롤해서 찾는다.
     await tester.scrollUntilVisible(bookTitle(novelTitle), 300);

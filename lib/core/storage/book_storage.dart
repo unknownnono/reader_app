@@ -10,17 +10,23 @@ final _invalidNameChars = RegExp(r'[\\/:*?"<>|]');
 /// 가져온 책을 앱 내부 books 폴더에 보관한다.
 /// 책 하나는 파일(txt, epub, zip) 또는 이미지 폴더다.
 class BookStorage {
-  BookStorage({Future<Directory> Function()? documentsDirectory})
-      : _documentsDirectory = documentsDirectory ?? getApplicationDocumentsDirectory;
+  /// [dataDirectory]를 주지 않으면 책도 문서 폴더 아래에 둔다.
+  BookStorage({
+    Future<Directory> Function()? documentsDirectory,
+    Future<Directory> Function()? dataDirectory,
+  })  : _documentsDirectory = documentsDirectory ?? getApplicationDocumentsDirectory,
+        _dataDirectory =
+            dataDirectory ?? documentsDirectory ?? getApplicationDocumentsDirectory;
 
   final Future<Directory> Function() _documentsDirectory;
+  final Future<Directory> Function() _dataDirectory;
 
   /// 앱 문서 폴더. iOS에서는 파일 앱의 "나의 iPhone" 아래에 앱 이름으로 보인다.
   Future<Directory> documentsDir() => _documentsDirectory();
 
   Future<Directory> _booksDir() async {
-    final docs = await _documentsDirectory();
-    final dir = Directory(p.join(docs.path, 'books'));
+    final data = await _dataDirectory();
+    final dir = Directory(p.join(data.path, 'books'));
     if (!await dir.exists()) await dir.create(recursive: true);
     return dir;
   }

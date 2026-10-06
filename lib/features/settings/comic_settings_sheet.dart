@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/reader_settings.dart';
 import '../../providers.dart';
+import '../reader/reading_session.dart';
 
 /// 만화 뷰어에서 여는 설정 창.
 void showComicSettingsSheet(BuildContext context) {
@@ -59,6 +60,7 @@ class _ComicSettingsSheet extends ConsumerWidget {
                   ),
               ],
             ),
+            const BrightnessControl(),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('가로 화면에서 두 쪽 보기'),

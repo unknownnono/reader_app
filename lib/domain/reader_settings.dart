@@ -57,6 +57,8 @@ class ReaderSettings {
     this.lineHeight = 1.7,
     this.margin = 20,
     this.theme = ReaderTheme.system,
+    this.brightness = systemBrightness,
+    this.groupSeries = true,
     this.comicRightToLeft = false,
     this.comicMode = ComicMode.paged,
     this.comicDoublePage = true,
@@ -70,6 +72,8 @@ class ReaderSettings {
   static const maxLineHeight = 2.4;
   static const minMargin = 8.0;
   static const maxMargin = 48.0;
+  static const systemBrightness = -1.0;
+  static const minBrightness = 0.05;
 
   final double fontSize;
   final double lineHeight;
@@ -77,6 +81,12 @@ class ReaderSettings {
   /// 본문 좌우 여백
   final double margin;
   final ReaderTheme theme;
+
+  /// 읽는 동안의 화면 밝기(0.05~1.0). [systemBrightness]면 기기 밝기를 그대로 쓴다.
+  final double brightness;
+
+  /// 서재에서 "짱 01, 짱 02…"처럼 권 번호만 다른 책을 한 묶음으로 보여 줄지
+  final bool groupSeries;
 
   /// 만화 넘김 방향. 일본 만화는 오른쪽에서 왼쪽으로 읽는다.
   final bool comicRightToLeft;
@@ -94,6 +104,8 @@ class ReaderSettings {
     double? lineHeight,
     double? margin,
     ReaderTheme? theme,
+    double? brightness,
+    bool? groupSeries,
     bool? comicRightToLeft,
     ComicMode? comicMode,
     bool? comicDoublePage,
@@ -105,6 +117,12 @@ class ReaderSettings {
       lineHeight: (lineHeight ?? this.lineHeight).clamp(minLineHeight, maxLineHeight),
       margin: (margin ?? this.margin).clamp(minMargin, maxMargin),
       theme: theme ?? this.theme,
+      brightness: brightness == null
+          ? this.brightness
+          : brightness < 0
+              ? systemBrightness
+              : brightness.clamp(minBrightness, 1.0),
+      groupSeries: groupSeries ?? this.groupSeries,
       comicRightToLeft: comicRightToLeft ?? this.comicRightToLeft,
       comicMode: comicMode ?? this.comicMode,
       comicDoublePage: comicDoublePage ?? this.comicDoublePage,

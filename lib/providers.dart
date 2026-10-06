@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:drift_flutter/drift_flutter.dart';
+
 import 'core/storage/book_storage.dart';
+import 'core/storage/storage_locations.dart';
 import 'core/utils/natural_compare.dart';
 import 'data/book_repository.dart';
 import 'data/bookmark_repository.dart';
@@ -13,13 +16,31 @@ import 'domain/reader_settings.dart';
 import 'features/library/import/book_importer.dart';
 import 'features/library/import/inbox_scanner.dart';
 
+/// 앱이 쓰는 폴더. 시작할 때 정해서 바꿔 넣는다. 없으면 전부 문서 폴더를 쓴다.
+final storageLocationsProvider = Provider<StorageLocations?>((ref) => null);
+
 final databaseProvider = Provider<AppDatabase>((ref) {
-  final db = AppDatabase();
+  final storage = ref.watch(storageLocationsProvider);
+  final db = AppDatabase(
+    storage == null
+        ? null
+        : driftDatabase(
+            name: 'reader_app',
+            native: DriftNativeOptions(databaseDirectory: () async => storage.data),
+          ),
+  );
   ref.onDispose(db.close);
   return db;
 });
 
-final bookStorageProvider = Provider<BookStorage>((ref) => BookStorage());
+final bookStorageProvider = Provider<BookStorage>((ref) {
+  final storage = ref.watch(storageLocationsProvider);
+  if (storage == null) return BookStorage();
+  return BookStorage(
+    documentsDirectory: () async => storage.inbox,
+    dataDirectory: () async => storage.data,
+  );
+});
 
 final bookRepositoryProvider = Provider<BookRepository>(
   (ref) => BookRepository(ref.watch(databaseProvider)),

@@ -19,6 +19,8 @@ class SettingsRepository {
       lineHeight: prefs.getDouble('reader.lineHeight'),
       margin: prefs.getDouble('reader.margin'),
       theme: ReaderTheme.values.where((t) => t.name == themeName).firstOrNull,
+      brightness: prefs.getDouble('reader.brightness'),
+      groupSeries: prefs.getBool('library.groupSeries'),
       comicRightToLeft: prefs.getBool('comic.rightToLeft'),
       comicMode: ComicMode.values
           .where((m) => m.name == prefs.getString('comic.mode'))
@@ -38,6 +40,8 @@ class SettingsRepository {
     await prefs.setDouble('reader.lineHeight', settings.lineHeight);
     await prefs.setDouble('reader.margin', settings.margin);
     await prefs.setString('reader.theme', settings.theme.name);
+    await prefs.setDouble('reader.brightness', settings.brightness);
+    await prefs.setBool('library.groupSeries', settings.groupSeries);
     await prefs.setBool('comic.rightToLeft', settings.comicRightToLeft);
     await prefs.setString('comic.mode', settings.comicMode.name);
     await prefs.setBool('comic.doublePage', settings.comicDoublePage);

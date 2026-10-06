@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/reader_settings.dart';
 import '../../providers.dart';
+import '../reader/reading_session.dart';
 
 /// 글 읽기 화면에서 여는 설정 창. 바꾸는 즉시 뒤의 본문에 반영된다.
 void showReaderSettingsSheet(BuildContext context) {
@@ -42,6 +43,7 @@ class _ReaderSettingsSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
+            const BrightnessControl(),
             _Stepper(
               label: '글자 크기',
               value: settings.fontSize.round().toString(),

@@ -6,20 +6,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app.dart';
 import '../../core/diag/diag_log.dart';
+import '../../core/utils/natural_compare.dart';
 import '../../data/db/app_database.dart';
 import '../../domain/reader_settings.dart';
 import '../../providers.dart';
 import '../reader/reader_screen.dart';
 import '../settings/diag_screen.dart';
+import '../transfer/transfer_screen.dart';
 import 'book_cover.dart';
 import 'import/book_importer.dart';
+import 'series.dart';
 
 /// 앱 문서 폴더가 파일 앱에 보이는 플랫폼에서만 "앱 폴더에서 가져오기"를 쓴다.
 /// 디버그 빌드에서는 에뮬레이터로 확인할 수 있게 Android에서도 켠다.
 bool get _usesAppFolder => Platform.isIOS || kDebugMode;
 
 class LibraryScreen extends ConsumerStatefulWidget {
-  const LibraryScreen({super.key});
+  const LibraryScreen({super.key, this.series});
+
+  /// 주어지면 서재 전체가 아니라 이 묶음에 든 책만 보여 준다.
+  final SeriesRef? series;
 
   @override
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
@@ -36,9 +42,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   void initState() {
     super.initState();
-    // 파일 앱에서 책을 넣고 돌아오면 바로 서재에 나타나게 한다.
-    _lifecycle = AppLifecycleListener(onResume: () => _scanAppFolder(silent: true));
-    _scanAppFolder(silent: true);
+    // 파일 앱에서 책을 넣고 돌아오면 바로 서재에 나타나게 한다. 묶음 화면에서는 하지 않는다.
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (widget.series == null) _scanAppFolder(silent: true);
+      },
+    );
+    if (widget.series == null) _scanAppFolder(silent: true);
   }
 
   @override
@@ -187,6 +197,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 },
               ),
             ListTile(
+              leading: const Icon(Icons.wifi),
+              title: const Text('Wi-Fi로 받기'),
+              subtitle: const Text('같은 Wi-Fi의 PC 브라우저에서 파일과 폴더 보내기'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const TransferScreen()),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.bug_report_outlined),
               title: const Text('진단 기록'),
               subtitle: const Text('가져오기가 안 될 때 어디서 멈추는지 확인'),
@@ -306,23 +327,38 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
     final notifier = ref.read(readerSettingsProvider.notifier);
     return AppBar(
-      title: const Text('서재'),
+      title: Text(widget.series?.name ?? '서재'),
       actions: [
         IconButton(
           tooltip: '제목 검색',
           onPressed: () => setState(() => _searching = true),
           icon: const Icon(Icons.search),
         ),
-        PopupMenuButton<LibrarySort>(
-          tooltip: '정렬',
-          icon: const Icon(Icons.sort),
-          initialValue: settings.librarySort,
-          onSelected: (sort) => notifier.update((s) => s.copyWith(librarySort: sort)),
-          itemBuilder: (context) => [
-            for (final sort in LibrarySort.values)
-              PopupMenuItem(value: sort, child: Text(sort.label)),
-          ],
-        ),
+        // 묶음 안은 항상 권 순서라 정렬을 고를 일이 없다.
+        if (widget.series == null)
+          PopupMenuButton<Object>(
+            tooltip: '정렬',
+            icon: const Icon(Icons.sort),
+            onSelected: (value) => notifier.update(
+              (s) => value is LibrarySort
+                  ? s.copyWith(librarySort: value)
+                  : s.copyWith(groupSeries: !s.groupSeries),
+            ),
+            itemBuilder: (context) => [
+              for (final sort in LibrarySort.values)
+                CheckedPopupMenuItem(
+                  value: sort,
+                  checked: settings.librarySort == sort,
+                  child: Text(sort.label),
+                ),
+              const PopupMenuDivider(),
+              CheckedPopupMenuItem(
+                value: 'groupSeries',
+                checked: settings.groupSeries,
+                child: const Text('시리즈로 묶기'),
+              ),
+            ],
+          ),
         IconButton(
           tooltip: settings.libraryGrid ? '목록으로 보기' : '표지로 보기',
           onPressed: () =>
@@ -333,21 +369,61 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  Widget _body(List<Book> books, ReaderSettings settings) {
+  /// 이 화면에 보일 책. 묶음 화면이면 그 묶음의 책만 권 순서로 고른다.
+  List<Book> _scope(List<Book> books) {
+    final series = widget.series;
+    if (series == null) return books;
+    return books.where(series.contains).toList()
+      ..sort((a, b) => naturalCompare(a.title, b.title));
+  }
+
+  Widget _body(List<Book> allBooks, ReaderSettings settings) {
+    final books = _scope(allBooks);
     if (books.isEmpty) {
-      return const Center(child: Text('아래 + 버튼으로 책을 추가하세요.'));
+      return Center(
+        child: Text(widget.series == null ? '아래 + 버튼으로 책을 추가하세요.' : '이 묶음에 남은 책이 없습니다.'),
+      );
     }
     final query = _query.trim().toLowerCase();
-    final shown = query.isEmpty
+    final found = query.isEmpty
         ? books
         : books.where((b) => b.title.toLowerCase().contains(query)).toList();
-    if (shown.isEmpty) {
+    if (found.isEmpty) {
       return const Center(child: Text('검색 결과가 없습니다.'));
     }
+    // 검색 중이거나 이미 묶음 안이면 낱권으로 보여 준다.
+    final shown = settings.groupSeries && widget.series == null && query.isEmpty
+        ? groupSeries(found)
+        : [for (final book in found) LibraryEntry.single(book)];
 
-    Widget item(Book book) {
+    Widget item(LibraryEntry entry) {
+      final book = entry.cover;
+      if (entry.isSeries) {
+        final count = '${entry.books.length}권';
+        return _BookItem(
+          book: book,
+          title: entry.seriesName!,
+          detail: '${book.format.name.toUpperCase()} · $count',
+          badge: count,
+          grid: settings.libraryGrid,
+          selected: false,
+          // 선택 중에는 묶음을 건드리지 않는다. 묶음 안의 책은 들어가서 고른다.
+          onTap: () {
+            if (_selected.isNotEmpty) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LibraryScreen(
+                  series: SeriesRef(entry.seriesName!, book.format),
+                ),
+              ),
+            );
+          },
+          onLongPress: null,
+        );
+      }
       return _BookItem(
         book: book,
+        title: book.title,
         grid: settings.libraryGrid,
         selected: _selected.contains(book.id),
         // 선택 중에는 탭이 열기 대신 선택으로 동작한다.
@@ -391,7 +467,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         error: (error, _) => Center(child: Text('서재를 불러오지 못했습니다.\n$error')),
         data: (list) => _body(list, settings),
       ),
-      floatingActionButton: _selected.isNotEmpty
+      // 가져오기는 서재 첫 화면에서만 한다.
+      floatingActionButton: _selected.isNotEmpty || widget.series != null
           ? null
           : FloatingActionButton(
               onPressed: _showImportMenu,
@@ -452,29 +529,40 @@ class _TextInputDialogState extends State<_TextInputDialog> {
   }
 }
 
-/// 서재의 책 한 권. 격자에서는 표지와 제목, 목록에서는 한 줄로 보여 준다.
+/// 서재의 한 칸(책 한 권 또는 묶음). 격자에서는 표지와 제목, 목록에서는 한 줄로 보여 준다.
 class _BookItem extends ConsumerWidget {
   const _BookItem({
     required this.book,
+    required this.title,
     required this.grid,
     required this.selected,
     required this.onTap,
     required this.onLongPress,
+    this.detail,
+    this.badge,
   });
 
+  /// 표지로 쓸 책. 묶음이면 첫 권이다.
   final Book book;
+  final String title;
   final bool grid;
   final bool selected;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
+
+  /// 목록 보기의 둘째 줄. 없으면 형식과 진행률을 보여 준다.
+  final String? detail;
+
+  /// 표지 귀퉁이에 붙는 표시. 묶음의 권 수에 쓴다.
+  final String? badge;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    // 한 번도 열지 않은 책은 진행률이 없다.
-    final progress = ref.watch(
-      progressMapProvider.select((map) => map.value?[book.id]),
-    );
+    // 한 번도 열지 않은 책은 진행률이 없다. 묶음은 진행률을 보여 주지 않는다.
+    final progress = detail != null
+        ? null
+        : ref.watch(progressMapProvider.select((map) => map.value?[book.id]));
     final format = book.format.name.toUpperCase();
 
     if (!grid) {
@@ -489,11 +577,16 @@ class _BookItem extends ConsumerWidget {
             child: BookCover(book: book),
           ),
         ),
-        title: Text(book.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
-          progress == null ? format : '$format · ${(progress * 100).round()}%',
+          detail ??
+              (progress == null ? format : '$format · ${(progress * 100).round()}%'),
         ),
-        trailing: selected ? const Icon(Icons.check_circle) : null,
+        trailing: selected
+            ? const Icon(Icons.check_circle)
+            : badge != null
+                ? const Icon(Icons.chevron_right)
+                : null,
         onTap: onTap,
         onLongPress: onLongPress,
       );
@@ -519,6 +612,22 @@ class _BookItem extends ConsumerWidget {
                       alignment: Alignment.bottomCenter,
                       child: LinearProgressIndicator(value: progress, minHeight: 4),
                     ),
+                  if (badge != null)
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Container(
+                        margin: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          badge!,
+                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                        ),
+                      ),
+                    ),
                   if (selected)
                     ColoredBox(
                       color: scheme.primary.withValues(alpha: 0.45),
@@ -530,7 +639,7 @@ class _BookItem extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            book.title,
+            title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
